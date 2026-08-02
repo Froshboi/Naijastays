@@ -1,0 +1,13 @@
+<svg width="1200" height="900" viewBox="0 0 1200 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="900" fill="#EEF8F0"/>
+  <rect x="116" y="120" width="968" height="660" rx="40" fill="#F8FCF8" stroke="#CFE8D3" stroke-width="8"/>
+  <path d="M260 610L430 438L544 546L700 358L940 610" stroke="#2F8F4E" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="830" cy="282" r="58" fill="#9FD8AE"/>
+  <path d="M382 404L598 232L824 404" stroke="#1C6C3E" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M468 392V602" stroke="#1C6C3E" stroke-width="32" stroke-linecap="round"/>
+  <path d="M730 392V602" stroke="#1C6C3E" stroke-width="32" stroke-linecap="round"/>
+  <path d="M468 502H730" stroke="#1C6C3E" stroke-width="32" stroke-linecap="round"/>
+  <text x="600" y="706" text-anchor="middle" fill="#1C6C3E" font-family="Arial, sans-serif" font-size="46" font-weight="700">
+    NaijaStays Listing
+  </text>
+</svg>
