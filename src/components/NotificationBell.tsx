@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Bell, Check, Home, Eye, X, Loader2 } from "lucide-react";
+import { Bell, Home, Eye, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -18,7 +18,7 @@ interface Notification {
 }
 
 export default function NotificationBell() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
@@ -86,6 +86,7 @@ export default function NotificationBell() {
         case "mark_unavailable": {
           const propertyId = n.action_metadata?.property_id;
           if (!propertyId) break;
+          if (!window.confirm("Mark this property as unavailable and reject pending requests?")) break;
           const { error } = await supabase
             .from("properties")
             .update({ status: "occupied" })
@@ -102,22 +103,19 @@ export default function NotificationBell() {
         }
         case "view_property": {
           const propertyId = n.action_metadata?.property_id;
-          if (propertyId) navigate(`/property/${propertyId}`);
+          if (propertyId) navigate(`/?listing=${propertyId}`);
           setOpen(false);
           break;
         }
         case "view_offer": {
-          navigate("/landlord-dashboard");
+          navigate("/?dashboard=landlord");
           setOpen(false);
           break;
         }
+        case "review_booking":
         case "confirm_booking": {
-          const bookingId = n.action_metadata?.booking_id;
-          if (bookingId) {
-            const { error } = await supabase.from("booking_requests").update({ status: "confirmed" }).eq("id", bookingId);
-            if (error) throw error;
-            toast.success("Booking confirmed");
-          }
+          navigate("/?dashboard=landlord");
+          setOpen(false);
           break;
         }
         default:
@@ -150,15 +148,11 @@ export default function NotificationBell() {
           </button>
         );
       case "view_offer":
-        return (
-          <button onClick={() => handleAction(n)} className="mt-2 flex items-center gap-1.5 rounded-lg border border-primary/20 bg-secondary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-secondary/80">
-            <Eye size={12} /> View Dashboard
-          </button>
-        );
+      case "review_booking":
       case "confirm_booking":
         return (
-          <button onClick={() => handleAction(n)} disabled={actionLoading === n.id} className="mt-2 flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50">
-            {actionLoading === n.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Confirm
+          <button onClick={() => handleAction(n)} className="mt-2 flex items-center gap-1.5 rounded-lg border border-primary/20 bg-secondary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-secondary/80">
+            <Eye size={12} /> Review in dashboard
           </button>
         );
       default:
@@ -178,7 +172,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-96 rounded-2xl border border-border bg-white shadow-[0_20px_55px_-40px_rgba(15,23,42,0.35)] z-50 max-h-[80vh] flex flex-col">
+        <div className="fixed left-3 right-3 top-[86px] w-auto rounded-2xl border border-border bg-white shadow-[0_20px_55px_-40px_rgba(15,23,42,0.35)] z-50 max-h-[calc(100dvh-110px)] flex flex-col sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 sm:max-h-[80vh]">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
             <span className="text-sm font-semibold">Notifications</span>
             {unreadCount > 0 && (
@@ -194,7 +188,7 @@ export default function NotificationBell() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold text-foreground">{n.title}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-3 break-words">{n.body}</div>
                       <div className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleDateString()} • {n.type}</div>
                       {getActionButton(n)}
                     </div>

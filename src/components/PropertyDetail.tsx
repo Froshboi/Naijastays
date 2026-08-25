@@ -1,5 +1,6 @@
 import { ArrowLeft, CalendarDays, Heart, MessageCircle, Phone, Share2, ShieldCheck } from "lucide-react";
 import { Property, formatFullPrice } from "@/lib/data";
+import { getListingPrice, getRentalPricingSummary, formatNaira } from "@/lib/pricing";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useRef, useState } from "react";
 import AuthModal from "./AuthModal";
@@ -76,6 +77,9 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
   const agentTitle = p.agent_title?.trim() || "Verified property contact";
   const locationLabel = p.address || [p.city, p.state].filter(Boolean).join(", ") || "Nigeria";
   const isHotel = p.property_type === "Hotel";
+  const listingPrice = getListingPrice(p);
+  const rentalPricing = getRentalPricingSummary(p);
+  const rentalBaseAmount = rentalPricing?.moveInTotal || rentalPricing?.renewalRate || p.price;
 
   useEffect(() => {
     if (!isLiveListing) return;
@@ -107,8 +111,8 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
       toast.success("Listing link copied to clipboard!");
     }
   };
-  const svcFee = Math.round(p.price * (isNightly ? 0.12 : isRent ? 0.05 : 0.02));
-  const total = p.price + svcFee;
+  const svcFee = Math.round(rentalBaseAmount * (isNightly || isHotel ? 0.12 : isRent ? 0.05 : 0.02));
+  const total = rentalBaseAmount + svcFee;
 
   const openAction = (mode: "offer" | "booking" | "protection" | "escrow") => {
     if (!user) { setAuthOpen(true); return; }
@@ -118,7 +122,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
 
   const handleBook = () => {
     if (!user) { setAuthOpen(true); return; }
-    if (isNightly || isRent) { openAction("booking"); return; }
+    if (isNightly || isRent || isHotel) { openAction("booking"); return; }
     if (p.agent_phone) { window.open(getWhatsAppUrl(p.agent_phone, p.title), "_blank"); }
     else { toast.success("Viewing request sent! The landlord will follow up."); }
   };
@@ -210,8 +214,25 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
             {rating > 0 && <span>★ {rating} · {reviewCount} reviews</span>}
           </div>
           <div className="font-display text-3xl font-semibold text-primary mb-7">
-            {formatFullPrice(p.price)}{p.price_label && <span className="font-body text-base text-muted-foreground ml-1.5">{p.price_label}</span>}
+            {listingPrice.formatted}{listingPrice.label && <span className="font-body text-base text-muted-foreground ml-1.5">{listingPrice.label}</span>}
           </div>
+
+          {isRent && rentalPricing && (
+            <div className="mb-7 grid gap-3 rounded-2xl border border-primary/10 bg-primary/5 p-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Total move-in payment</p>
+                <p className="mt-1 font-display text-xl font-semibold text-foreground">
+                  {rentalPricing.moveInTotal ? formatNaira(rentalPricing.moveInTotal) : "Confirm with landlord"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Renewal rate</p>
+                <p className="mt-1 font-display text-xl font-semibold text-foreground">
+                  {formatNaira(rentalPricing.renewalRate)} <span className="font-body text-sm text-muted-foreground">{rentalPricing.label}</span>
+                </p>
+              </div>
+            </div>
+          )}
 
           {(p.beds ?? 0) > 0 && (
             <div className="flex gap-5 flex-wrap py-4 border-y border-border mb-7">
@@ -304,19 +325,19 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
         <div className="hidden lg:block">
           <div className="bg-card border border-primary/10 rounded-2xl p-6 sticky top-20 shadow-[0_24px_50px_-36px_rgba(21,128,61,0.55)]">
             <div className="font-display text-2xl font-semibold text-primary mb-1">
-              {formatFullPrice(p.price)} <span className="font-body text-sm text-muted-foreground">{p.price_label || "total"}</span>
+              {listingPrice.formatted} <span className="font-body text-sm text-muted-foreground">{listingPrice.label || "total"}</span>
             </div>
             {rating > 0 && <p className="text-sm text-muted-foreground mb-4">★ {rating} · {reviewCount} reviews · {p.city || p.state || "Nigeria"}</p>}
 
-            {(isNightly || isRent) && (
+            {(isNightly || isRent || isHotel) && (
               <div className="border border-border rounded-lg overflow-hidden mb-3">
                 <div className="grid grid-cols-2">
                   <div className="p-3 border-r border-border">
-                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">{isNightly ? "Check-in" : "Move in"}</label>
+                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">{isNightly || isHotel ? "Check-in" : "Move in"}</label>
                     <input type="date" className="border-none bg-transparent text-sm text-foreground w-full outline-none" />
                   </div>
                   <div className="p-3">
-                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">{isNightly ? "Check-out" : "Move out"}</label>
+                    <label className="block text-[10px] font-bold uppercase text-muted-foreground mb-1">{isNightly || isHotel ? "Check-out" : "Move out"}</label>
                     <input type="date" className="border-none bg-transparent text-sm text-foreground w-full outline-none" />
                   </div>
                 </div>
@@ -367,12 +388,18 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
               </button>
             )}
 
-            {(isNightly || isRent) && (
+            {(isNightly || isRent || isHotel) && (
               <div className="flex flex-col gap-3 pt-1">
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>{formatFullPrice(p.price)}{isNightly ? " × 1 night" : ""}</span>
-                  <span>{formatFullPrice(p.price)}</span>
+                  <span>{isRent ? "Listed total" : `${listingPrice.formatted} × 1 night`}</span>
+                  <span>{formatFullPrice(rentalBaseAmount)}</span>
                 </div>
+                {isRent && rentalPricing?.renewalRate && (
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Renewal rate</span>
+                    <span>{formatNaira(rentalPricing.renewalRate)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>NaijaStays service fee</span>
                   <span>{formatFullPrice(svcFee)}</span>
@@ -412,8 +439,8 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
       {/* Mobile sticky bottom bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-3 flex items-center gap-2.5 z-30">
         <div className="flex-1">
-          <div className="font-display font-bold text-foreground text-lg leading-tight">{formatFullPrice(p.price)}</div>
-          {p.price_label && <div className="text-xs text-muted-foreground">{p.price_label}</div>}
+          <div className="font-display font-bold text-foreground text-lg leading-tight">{listingPrice.formatted}</div>
+          {listingPrice.label && <div className="text-xs text-muted-foreground">{listingPrice.label}</div>}
         </div>
         {p.agent_phone && (
           <button onClick={handleCall} className="flex items-center gap-1.5 px-4 py-2.5 border border-border rounded-full text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">

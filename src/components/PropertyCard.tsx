@@ -1,6 +1,7 @@
 import { Heart, Share2 } from "lucide-react";
 import type { MouseEvent } from "react";
-import { Property, formatPrice } from "@/lib/data";
+import { Property } from "@/lib/data";
+import { getListingPrice } from "@/lib/pricing";
 
 interface PropertyCardProps {
   property: Property;
@@ -18,6 +19,7 @@ function badgeClass(type: string) {
 
 export default function PropertyCard({ property: p, isFavorite, onFavorite, onClick }: PropertyCardProps) {
   const mainImg = p.images?.[0] || "/placeholder.svg";
+  const listingPrice = getListingPrice(p);
   const shareUrl = typeof window !== "undefined" ? `${window.location.origin}${window.location.pathname}?listing=${p.id}` : "";
 
   const shareCard = async (e: MouseEvent<HTMLButtonElement>) => {
@@ -111,8 +113,8 @@ export default function PropertyCard({ property: p, isFavorite, onFavorite, onCl
           )}
         </div>
         <div className="flex items-baseline gap-1">
-          <span className="font-display text-lg font-semibold text-primary">{formatPrice(p.price)}</span>
-          {p.price_label && <span className="text-xs text-muted-foreground">{p.price_label}</span>}
+          <span className="font-display text-lg font-semibold text-primary">{listingPrice.formatted}</span>
+          {listingPrice.label && <span className="text-xs text-muted-foreground">{listingPrice.label}</span>}
         </div>
         {p.verified && (
           <div className="inline-flex items-center gap-1 text-[11px] text-naija-green font-bold bg-naija-green-bg px-2 py-0.5 rounded mt-2">

@@ -6,6 +6,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Property } from "@/lib/data";
+import { formatNaira, getListingPrice, getRentalPricingSummary } from "@/lib/pricing";
 import { toast } from "sonner";
 import { notifyUser } from "@/lib/notifications";
 
@@ -15,13 +16,15 @@ interface Props {
   onClose: () => void;
 }
 
-const formatPrice = (n: number) => `₦${n.toLocaleString("en-NG")}`;
-
 export default function PropertyActionModal({ mode, property, onClose }: Props) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [roomTypes, setRoomTypes] = useState<any[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<any>(null);
+  const [roomLoading, setRoomLoading] = useState(false);
+  const [roomLoadError, setRoomLoadError] = useState<string | null>(null);
+  const listingPrice = getListingPrice(property);
+  const rentalPricing = getRentalPricingSummary(property);
 
   const [form, setForm] = useState({
     offerAmount: "",
@@ -46,15 +49,31 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
 
   // Fetch room types when booking a hotel
   useEffect(() => {
-    if (mode === "booking" && property.property_type === "Hotel") {
-      supabase
-        .from("property_room_types")
-        .select("*")
-        .eq("property_id", property.id)
-        .then(({ data, error }) => {
-          if (!error && data) setRoomTypes(data);
-        });
+    if (mode !== "booking" || property.property_type !== "Hotel") {
+      setRoomTypes([]);
+      setSelectedRoom(null);
+      setRoomLoading(false);
+      setRoomLoadError(null);
+      return;
     }
+
+    setRoomLoading(true);
+    setRoomLoadError(null);
+    setSelectedRoom(null);
+
+    supabase
+      .from("property_room_types")
+      .select("*")
+      .eq("property_id", property.id)
+      .then(({ data, error }) => {
+        if (error) {
+          setRoomLoadError("Room options are not available yet. The booking can still be sent with the listing rate.");
+          setRoomTypes([]);
+          return;
+        }
+        setRoomTypes(data || []);
+      })
+      .finally(() => setRoomLoading(false));
   }, [mode, property.id, property.property_type]);
 
   const nights = useMemo(() => {
@@ -70,11 +89,14 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
     if (property.property_type === "Hotel" && selectedRoom) {
       return selectedRoom.price_per_night * nights;
     }
+    if (property.property_type === "Hotel") {
+      return property.price * nights;
+    }
     if (property.listing_type === "Short Let") {
       return property.price * nights;
     }
-    return property.price;
-  }, [mode, property, selectedRoom, nights]);
+    return rentalPricing?.moveInTotal || rentalPricing?.renewalRate || property.price;
+  }, [mode, property, selectedRoom, nights, rentalPricing?.moveInTotal, rentalPricing?.renewalRate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,7 +122,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           await notifyUser(
             property.user_id,
             "New Offer Received",
-            `Someone offered ${formatPrice(parseInt(form.offerAmount) || 0)} for ${property.title}. Review it in your dashboard.`,
+            `Someone offered ${formatNaira(parseInt(form.offerAmount) || 0)} for ${property.title}. Review it in your dashboard.`,
             "offer",
             "view_offer",
             { property_id: property.id }
@@ -110,7 +132,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
       
       else if (mode === "booking") {
         if (!form.moveInDate) throw new Error("Please select a move-in date");
-        if (property.property_type === "Hotel" && !selectedRoom) {
+        if (property.property_type === "Hotel" && roomTypes.length > 0 && !selectedRoom) {
           throw new Error("Please select a room type");
         }
         if ((property.listing_type === "Short Let" || property.property_type === "Hotel") && !form.moveOutDate) {
@@ -120,11 +142,11 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           throw new Error("Please specify the lease term in months");
         }
 
-        const { error } = await supabase.from("booking_requests").insert({
+        const { data: booking, error } = await supabase.from("booking_requests").insert({
           property_id: property.id,
           guest_id: user.id,
           landlord_id: property.user_id,
-          room_type_id: property.property_type === "Hotel" ? selectedRoom.id : null,
+          room_type_id: property.property_type === "Hotel" && selectedRoom ? selectedRoom.id : null,
           booking_type: property.listing_type === "Short Let" || property.property_type === "Hotel" ? "short_let" : "rental",
           check_in_date: form.moveInDate,
           check_out_date: (property.listing_type === "Short Let" || property.property_type === "Hotel") ? form.moveOutDate : null,
@@ -134,8 +156,21 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           phone: form.phone,
           notes: form.message,
           status: "pending",
-        });
+        }).select("id").single();
         if (error) throw error;
+
+        if (property?.user_id) {
+          const requestLabel = property.property_type === "Hotel" ? "room booking" : isRental ? "rental booking" : "short-let booking";
+          await notifyUser(
+            property.user_id,
+            "New booking request",
+            `A tenant sent a ${requestLabel} request for ${property.title}. Review it before confirming.`,
+            "booking",
+            "review_booking",
+            { property_id: property.id, booking_id: booking?.id }
+          );
+        }
+
         toast.success(
           property.property_type === "Hotel" 
             ? "Booking request sent for your selected room!" 
@@ -191,8 +226,8 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
   const isRental = property.listing_type === "For Rent";
 
   return (
-    <div className="fixed inset-0 bg-foreground/45 z-50 flex items-end sm:items-center justify-center overflow-y-auto" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="bg-card rounded-t-2xl sm:rounded-2xl w-full max-w-[520px] max-h-[92dvh] overflow-y-auto shadow-xl my-auto sm:my-0 flex flex-col">
+    <div className="fixed inset-0 bg-foreground/45 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-card rounded-t-2xl sm:rounded-2xl w-full max-w-[520px] max-h-[calc(100dvh-0.75rem)] sm:max-h-[92dvh] overflow-hidden shadow-xl flex flex-col">
         
         {/* Sticky Header */}
         <div className="sticky top-0 bg-card border-b border-border z-10">
@@ -214,7 +249,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
               <h3 className="text-sm font-semibold text-foreground truncate">{property.title}</h3>
               <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                 <MapPin size={10} />
-                {property.city}, {property.state} · {formatPrice(property.price)}{property.price_label}
+                {property.city}, {property.state} · {listingPrice.formatted}{listingPrice.label}
               </p>
             </div>
             <button onClick={onClose} className="text-muted-foreground hover:text-foreground shrink-0 p-1">
@@ -223,7 +258,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5 flex-1">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5 flex-1 overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-6">
 
           {/* ==================== OFFER ==================== */}
           {mode === "offer" && (
@@ -286,8 +321,16 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
                   {!selectedRoom ? (
                     <>
                       <label className="block text-xs font-semibold text-muted-foreground">Select a Room</label>
-                      {roomTypes.length === 0 && (
-                        <p className="text-sm text-muted-foreground">Loading available rooms…</p>
+                      {roomLoading && <p className="text-sm text-muted-foreground">Loading available rooms...</p>}
+                      {!roomLoading && roomLoadError && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                          {roomLoadError}
+                        </div>
+                      )}
+                      {!roomLoading && !roomLoadError && roomTypes.length === 0 && (
+                        <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs text-primary">
+                          No room types have been added yet. The request will use the hotel base rate of {listingPrice.formatted}/night.
+                        </div>
                       )}
                       <div className="space-y-2">
                         {roomTypes.map((room) => (
@@ -300,7 +343,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
                             <div className="flex justify-between items-start mb-1">
                               <h4 className="text-sm font-semibold">{room.name}</h4>
                               <span className="text-sm font-bold text-primary">
-                                {formatPrice(room.price_per_night)}<span className="text-[10px] font-normal text-muted-foreground">/night</span>
+                                {formatNaira(room.price_per_night)}<span className="text-[10px] font-normal text-muted-foreground">/night</span>
                               </span>
                             </div>
                             {room.description && (
@@ -321,7 +364,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
                         <p className="text-[10px] font-bold uppercase tracking-wider text-primary mb-0.5">Selected Room</p>
                         <h4 className="text-sm font-semibold">{selectedRoom.name}</h4>
                         <p className="text-xs text-muted-foreground">
-                          {formatPrice(selectedRoom.price_per_night)}/night · Max {selectedRoom.max_guests} guests
+                          {formatNaira(selectedRoom.price_per_night)}/night · Max {selectedRoom.max_guests} guests
                         </p>
                       </div>
                       <button 
@@ -337,7 +380,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
               )}
 
               {/* Dates */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
                     {isShortStay ? "Check-in" : "Move-in date"} *
@@ -404,14 +447,29 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
                 <div className="rounded-lg bg-secondary/50 border border-border p-3 space-y-2">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-muted-foreground">
-                      {formatPrice(property.property_type === "Hotel" && selectedRoom ? selectedRoom.price_per_night : property.price)} × {nights} night{nights > 1 ? 's' : ''}
+                      {formatNaira(property.property_type === "Hotel" && selectedRoom ? selectedRoom.price_per_night : property.price)} × {nights} night{nights > 1 ? 's' : ''}
                     </span>
-                    <span className="font-bold">{formatPrice(totalQuote)}</span>
+                    <span className="font-bold">{formatNaira(totalQuote)}</span>
                   </div>
                   <div className="h-px bg-border" />
                   <div className="flex justify-between items-center text-sm font-bold">
                     <span>Total</span>
-                    <span className="text-primary">{formatPrice(totalQuote)}</span>
+                    <span className="text-primary">{formatNaira(totalQuote)}</span>
+                  </div>
+                </div>
+              )}
+
+              {isRental && rentalPricing && (
+                <div className="rounded-lg bg-primary/5 border border-primary/10 p-3 space-y-2">
+                  <div className="flex justify-between gap-4 text-sm">
+                    <span className="text-muted-foreground">Total move-in payment</span>
+                    <span className="font-bold text-foreground">
+                      {rentalPricing.moveInTotal ? formatNaira(rentalPricing.moveInTotal) : "Confirm with landlord"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-4 text-sm">
+                    <span className="text-muted-foreground">Renewal rate</span>
+                    <span className="font-bold text-primary">{formatNaira(rentalPricing.renewalRate)} {rentalPricing.label}</span>
                   </div>
                 </div>
               )}
@@ -539,7 +597,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           <button 
             type="submit" 
             disabled={loading}
-            className="w-full py-3.5 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+            className="sticky bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:bottom-0 w-full py-3.5 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_18px_38px_-18px_rgba(21,128,61,0.8)]"
           >
             {loading ? (
               <><Loader2 size={16} className="animate-spin" /> Processing…</>

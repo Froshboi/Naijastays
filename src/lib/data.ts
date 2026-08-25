@@ -7,6 +7,7 @@ export interface Property {
   price_label: string | null;
   listing_type: string;
   property_type: string;
+  unit_type?: string | null;
   beds: number | null;
   baths: number | null;
   size: string | null;
