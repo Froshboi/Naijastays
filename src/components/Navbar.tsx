@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Search, LayoutDashboard, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AuthModal from "./AuthModal";
+import NotificationBell from "./NotificationBell"; // ← ADD THIS
 
 interface NavbarProps {
   onSearch: (val: string) => void;
@@ -51,23 +52,18 @@ export default function Navbar({ onSearch, onDashboard, onAdmin }: NavbarProps) 
           {user ? (
             <>
               {isLandlord && onDashboard && (
-  <button
-    onClick={onDashboard}
-    className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-full text-sm font-medium border border-primary/15 bg-secondary/70 text-foreground hover:bg-secondary transition-colors"
-  >
-    <LayoutDashboard size={16} />
-    <span className="hidden md:inline">Dashboard</span>
-  </button>
-)}
+                <button onClick={onDashboard} className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-full text-sm font-medium border border-primary/15 bg-secondary/70 text-foreground hover:bg-secondary transition-colors">
+                  <LayoutDashboard size={16} />
+                  <span className="hidden md:inline">Dashboard</span>
+                </button>
+              )}
               {roles.includes("admin") && onAdmin && (
-  <button
-    onClick={onAdmin}
-    className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-full text-sm font-medium border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors"
-  >
-    <ShieldCheck size={16} />
-    <span className="hidden md:inline">Admin</span>
-  </button>
-)}
+                <button onClick={onAdmin} className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-full text-sm font-medium border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 transition-colors">
+                  <ShieldCheck size={16} />
+                  <span className="hidden md:inline">Admin</span>
+                </button>
+              )}
+              <NotificationBell /> {/* ← MOVED INSIDE user block */}
               <span className="text-sm text-muted-foreground hidden sm:inline">
                 Hi, {profile?.full_name?.split(" ")[0] || "User"}
               </span>

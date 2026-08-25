@@ -12,6 +12,23 @@ interface Props {
   onSuccess: () => void;
 }
 
+const UNIT_TYPES = [
+  "Self Contain",
+  "Mini Flat",
+  "1 Bedroom",
+  "2 Bedroom",
+  "3 Bedroom",
+  "4+ Bedroom",
+  "Bungalow",
+  "Mansion",
+  "Penthouse",
+  "Duplex",
+  "Terrace",
+  "Commercial Space",
+  "Warehouse",
+  "Office Space",
+];
+
 const resizeImage = (file: File, maxWidth = 1200, quality = 0.85): Promise<Blob> => {
   return new Promise((resolve) => {
     const img = new Image();
@@ -42,6 +59,7 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
   const [form, setForm] = useState({
     title: "", description: "", writeup: "", price: "", price_label: "",
     listing_type: "For Sale", property_type: "Apartment",
+    unit_type: "",
     beds: "0", baths: "0", size: "", city: "", state: "Rivers", address: "",
     amenities: "", agent_name: "", agent_title: "", agent_phone: "",
   });
@@ -157,6 +175,7 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
         price_label: form.price_label,
         listing_type: form.listing_type,
         property_type: form.property_type,
+        unit_type: form.unit_type || null,
         beds: parseInt(form.beds) || 0,
         baths: parseInt(form.baths) || 0,
         size: form.size,
@@ -305,6 +324,19 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
             </div>
           </div>
 
+          {/* NEW: Unit Type */}
+          <div>
+            <label className="block text-xs font-semibold text-muted-foreground mb-1">Unit Type <span className="font-normal text-naija-faint">(optional)</span></label>
+            <select name="unit_type" value={form.unit_type} onChange={handleChange}
+              className="w-full px-3.5 py-2.5 border border-border rounded-lg text-sm bg-card">
+              <option value="">Select unit type…</option>
+              {UNIT_TYPES.map((ut) => (
+                <option key={ut} value={ut}>{ut}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">Helps renters filter by Self Contain, Mini Flat, 1 Bed, etc.</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">Price (₦) *</label>
@@ -320,7 +352,7 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
 
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-muted-foreground mb-1">Beds</label>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Beds / Rooms</label>
               <input name="beds" value={form.beds} onChange={handleChange} type="number"
                 className="w-full px-3.5 py-2.5 border border-border rounded-lg text-sm bg-card" />
             </div>

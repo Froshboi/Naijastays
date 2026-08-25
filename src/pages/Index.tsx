@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -177,6 +177,26 @@ export default function Index() {
     return true;
   });
 
+  // Dynamic trusted areas from actual listings
+  const trustedAreas = useMemo(() => {
+    const groups: Record<string, { count: number; img: string | null }> = {};
+    properties.forEach((p) => {
+      const city = p.city?.trim();
+      if (!city) return;
+      if (!groups[city]) {
+        groups[city] = { count: 0, img: null };
+      }
+      groups[city].count += 1;
+      if (!groups[city].img && p.images && p.images.length > 0) {
+        groups[city].img = p.images[0];
+      }
+    });
+    return Object.entries(groups)
+      .map(([name, data]) => ({ name, count: data.count, img: data.img }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+  }, [properties]);
+
   // Landlord Dashboard
   if (showDashboard && user && isLandlord) {
     return (
@@ -285,28 +305,45 @@ export default function Index() {
         )}
       </div>
 
-      {/* Port Harcourt Areas */}
+      {/* Browse trusted areas — dynamically populated from listings */}
       <div className="mx-auto max-w-7xl px-4 py-8 md:px-8">
         <div className="flex items-baseline justify-between mb-4">
           <h2 className="font-display text-[22px] font-semibold text-foreground">Browse trusted areas</h2>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {[
-            { name: "GRA Phase 3", count: 45, img: "https://images.unsplash.com/photo-1555990793-da11153b6d8a?w=400&q=80" },
-            { name: "Old GRA", count: 38, img: "https://images.unsplash.com/photo-1509600110300-21b9d5fedeb7?w=400&q=80" },
-            { name: "Trans Amadi", count: 52, img: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=400&q=80" },
-            { name: "Woji", count: 31, img: "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?w=400&q=80" },
-          ].map((c) => (
-            <div key={c.name} onClick={() => { setSearch(c.name); setListingPreset(""); }}
-              className="relative rounded-xl overflow-hidden cursor-pointer h-[148px] transition-transform hover:scale-[1.02]">
-              <img src={c.img} alt={c.name} loading="lazy" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-3.5">
-                <div className="text-[15px] font-bold text-card">{c.name}</div>
-                <div className="text-[11px] text-card/80 mt-0.5">{c.count} listings</div>
+
+        {trustedAreas.length > 0 ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {trustedAreas.map((c) => (
+              <div
+                key={c.name}
+                onClick={() => {
+                  setSearch(c.name);
+                  setListingPreset("");
+                  setActiveCat("all");
+                  setTypeFilter("");
+                  setQuickFilter("all");
+                  document.getElementById("listings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                className="relative rounded-xl overflow-hidden cursor-pointer h-[148px] transition-transform hover:scale-[1.02]"
+              >
+                {c.img ? (
+                  <img src={c.img} alt={c.name} loading="lazy" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-primary/30 to-primary/10" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-3.5">
+                  <div className="text-[15px] font-bold text-card">{c.name}</div>
+                  <div className="text-[11px] text-card/80 mt-0.5">{c.count} listing{c.count === 1 ? "" : "s"}</div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-primary/10 bg-secondary/40 p-8 text-center">
+            <p className="text-sm font-semibold text-foreground mb-1">📍 Areas coming soon</p>
+            <p className="text-xs text-muted-foreground">Trusted areas will appear here automatically as properties are listed on NaijaStays.</p>
+          </div>
+        )}
 
         {/* Expansion note */}
         <div className="mt-6 bg-secondary border border-primary/15 rounded-2xl p-5 text-center shadow-[0_18px_40px_-34px_rgba(21,128,61,0.8)]">

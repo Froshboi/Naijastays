@@ -4,7 +4,7 @@ import MarketingPageShell from "@/components/MarketingPageShell";
 const values = [
   {
     title: "Verification before velocity",
-    text: "We would rather slow a listing down than rush an unverified property into someone’s next major life decision.",
+    text: "We would rather slow a listing down than rush an unverified property into someone's next major life decision.",
   },
   {
     title: "Local trust over generic scale",
@@ -26,7 +26,7 @@ export default function AboutUs() {
   return (
     <MarketingPageShell
       eyebrow="Company"
-      title="We’re building a calmer way to find property in Nigeria."
+      title="We're building a calmer way to find property in Nigeria."
       description="NaijaStays exists to make property discovery feel more human, more transparent, and more trustworthy. We want every renter, buyer, and host to feel like they have a local team helping them make a confident move."
       action={
         <div className="space-y-4">
@@ -70,6 +70,27 @@ export default function AboutUs() {
             <p className="mt-3 text-sm leading-7 text-muted-foreground">{value.text}</p>
           </div>
         ))}
+      </section>
+
+      {/* Meet the Team callout */}
+      <section className="mt-8">
+        <div className="rounded-[30px] border border-primary/10 bg-[linear-gradient(135deg,rgba(20,83,45,0.96),rgba(34,197,94,0.88))] p-8 text-card shadow-[0_24px_55px_-42px_rgba(21,128,61,0.55)]">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_auto] lg:items-center">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-card/60">The People</p>
+              <h2 className="mt-3 font-display text-3xl font-semibold">Meet the team behind the vision</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-card/80">
+                From leadership to operations, legal to creative — get to know the people working every day to make your property journey calmer and more trustworthy.
+              </p>
+            </div>
+            <Link
+              to="/agents"
+              className="inline-flex items-center justify-center rounded-full bg-card px-6 py-3 text-sm font-semibold text-foreground transition-transform hover:scale-[1.02]"
+            >
+              View our team
+            </Link>
+          </div>
+        </div>
       </section>
 
       <section className="mt-8 rounded-[30px] border border-primary/10 bg-[linear-gradient(135deg,rgba(20,83,45,0.96),rgba(34,197,94,0.88))] p-8 text-card shadow-[0_24px_55px_-42px_rgba(21,128,61,0.55)]">

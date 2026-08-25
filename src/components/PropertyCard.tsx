@@ -39,6 +39,10 @@ export default function PropertyCard({ property: p, isFavorite, onFavorite, onCl
     window.alert("Listing link copied to clipboard.");
   };
 
+  const isHotel = p.property_type === "Hotel";
+  const bedLabel = isHotel ? "room" : "bed";
+  const bedLabelPlural = isHotel ? "rooms" : "beds";
+
   return (
     <div className="bg-card rounded-lg overflow-hidden border border-border cursor-pointer transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_18px_35px_-28px_rgba(21,128,61,0.6)] hover:border-primary/25"
       onClick={() => onClick(p.id)}>
@@ -85,9 +89,26 @@ export default function PropertyCard({ property: p, isFavorite, onFavorite, onCl
         </div>
         <p className="text-xs text-muted-foreground mb-2">📍 {p.city}, {p.state}</p>
         <div className="flex gap-1.5 mb-2.5 flex-wrap">
-          {(p.beds ?? 0) > 0 && <span className="text-[11px] text-muted-foreground bg-naija-surface px-1.5 py-0.5 rounded font-medium">🛏 {p.beds} bed</span>}
-          {(p.baths ?? 0) > 0 && <span className="text-[11px] text-muted-foreground bg-naija-surface px-1.5 py-0.5 rounded font-medium">🚿 {p.baths} bath</span>}
-          {p.size && <span className="text-[11px] text-muted-foreground bg-naija-surface px-1.5 py-0.5 rounded font-medium">📐 {p.size}</span>}
+          {(p.beds ?? 0) > 0 && (
+            <span className="text-[11px] text-muted-foreground bg-naija-surface px-1.5 py-0.5 rounded font-medium">
+              🛏 {p.beds} {p.beds === 1 ? bedLabel : bedLabelPlural}
+            </span>
+          )}
+          {(p.baths ?? 0) > 0 && (
+            <span className="text-[11px] text-muted-foreground bg-naija-surface px-1.5 py-0.5 rounded font-medium">
+              🚿 {p.baths} bath
+            </span>
+          )}
+          {p.size && (
+            <span className="text-[11px] text-muted-foreground bg-naija-surface px-1.5 py-0.5 rounded font-medium">
+              📐 {p.size}
+            </span>
+          )}
+          {p.unit_type && (
+            <span className="text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-medium">
+              {p.unit_type}
+            </span>
+          )}
         </div>
         <div className="flex items-baseline gap-1">
           <span className="font-display text-lg font-semibold text-primary">{formatPrice(p.price)}</span>

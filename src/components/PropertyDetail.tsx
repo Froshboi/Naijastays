@@ -30,53 +30,26 @@ function getWhatsAppUrl(phone: string, propertyTitle: string) {
   return `https://wa.me/${formatted}?text=${msg}`;
 }
 
-function AutoPreviewVideo({
-  src,
-  className,
-}: {
-  src: string;
-  className: string;
-}) {
+function AutoPreviewVideo({ src, className }: { src: string; className: string }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           const playAttempt = video.play();
-          if (playAttempt && typeof playAttempt.catch === "function") {
-            playAttempt.catch(() => undefined);
-          }
+          if (playAttempt && typeof playAttempt.catch === "function") playAttempt.catch(() => undefined);
         } else {
           video.pause();
         }
       },
       { threshold: 0.55 },
     );
-
     observer.observe(video);
-
-    return () => {
-      observer.disconnect();
-      video.pause();
-    };
+    return () => { observer.disconnect(); video.pause(); };
   }, [src]);
-
-  return (
-    <video
-      ref={videoRef}
-      src={src}
-      controls
-      muted
-      loop
-      playsInline
-      preload="metadata"
-      className={className}
-    />
-  );
+  return <video ref={videoRef} src={src} controls muted loop playsInline preload="metadata" className={className} />;
 }
 
 export default function PropertyDetail({ property: p, isFavorite, onFavorite, onBack, onSelectProperty }: Props) {
@@ -102,6 +75,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
   const agentName = p.agent_name?.trim() || "NaijaStays Host";
   const agentTitle = p.agent_title?.trim() || "Verified property contact";
   const locationLabel = p.address || [p.city, p.state].filter(Boolean).join(", ") || "Nigeria";
+  const isHotel = p.property_type === "Hotel";
 
   useEffect(() => {
     if (!isLiveListing) return;
@@ -112,9 +86,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
     });
   }, [isLiveListing, p.id, user?.id]);
 
-  useEffect(() => {
-    setImgIdx(0);
-  }, [p.id]);
+  useEffect(() => { setImgIdx(0); }, [p.id]);
 
   const handleImageError = (event: React.SyntheticEvent<HTMLImageElement>) => {
     event.currentTarget.onerror = null;
@@ -125,11 +97,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
     if (!shareUrl) return;
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: p.title,
-          text: `Check out this NaijaStays listing: ${p.title}`,
-          url: shareUrl,
-        });
+        await navigator.share({ title: p.title, text: `Check out this NaijaStays listing: ${p.title}`, url: shareUrl });
       } catch {
         await navigator.clipboard.writeText(shareUrl);
         toast.success("Listing link copied to clipboard!");
@@ -144,24 +112,15 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
 
   const openAction = (mode: "offer" | "booking" | "protection" | "escrow") => {
     if (!user) { setAuthOpen(true); return; }
-    if (!isLiveListing) {
-      toast.info("This demo listing is not yet live for requests.");
-      return;
-    }
+    if (!isLiveListing) { toast.info("This demo listing is not yet live for requests."); return; }
     setActionMode(mode);
   };
 
   const handleBook = () => {
     if (!user) { setAuthOpen(true); return; }
-    if (isNightly || isRent) {
-      openAction("booking");
-      return;
-    }
-    if (p.agent_phone) {
-      window.open(getWhatsAppUrl(p.agent_phone, p.title), "_blank");
-    } else {
-      toast.success("Viewing request sent! The landlord will follow up.");
-    }
+    if (isNightly || isRent) { openAction("booking"); return; }
+    if (p.agent_phone) { window.open(getWhatsAppUrl(p.agent_phone, p.title), "_blank"); }
+    else { toast.success("Viewing request sent! The landlord will follow up."); }
   };
 
   const handleWhatsApp = () => {
@@ -221,9 +180,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
           <div className="flex gap-2 mt-3 justify-center">
             {media.slice(0, 5).map((item, i) => (
               <button key={i} onClick={() => setImgIdx(i)}
-                className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
-                  i === imgIdx ? "border-primary" : "border-border"
-                }`}>
+                className={`w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${i === imgIdx ? "border-primary" : "border-border"}`}>
                 {item.type === 'video' ? (
                   <video src={item.src} className="w-full h-full object-cover" muted />
                 ) : (
@@ -232,9 +189,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
               </button>
             ))}
             {media.length > 5 && (
-              <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center text-sm text-muted-foreground">
-                +{media.length - 5}
-              </div>
+              <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center text-sm text-muted-foreground">+{media.length - 5}</div>
             )}
           </div>
         )}
@@ -247,6 +202,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
           <div className="flex items-center gap-2.5 mb-3 flex-wrap">
             <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${badgeClass(p.listing_type)}`}>{p.listing_type}</span>
             {p.verified && <span className="inline-flex items-center gap-1 text-[11px] text-naija-green font-bold bg-naija-green-bg px-2 py-0.5 rounded-lg">✓ Verified</span>}
+            {p.unit_type && <span className="inline-flex items-center gap-1 text-[11px] text-primary font-bold bg-primary/10 px-2 py-0.5 rounded-lg">{p.unit_type}</span>}
           </div>
           <h1 className="font-display text-2xl md:text-3xl font-semibold text-foreground mb-2">{p.title}</h1>
           <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4 flex-wrap">
@@ -259,8 +215,12 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
 
           {(p.beds ?? 0) > 0 && (
             <div className="flex gap-5 flex-wrap py-4 border-y border-border mb-7">
-              <span className="flex items-center gap-2 text-sm font-medium">🛏 {p.beds} Bedrooms</span>
-              <span className="flex items-center gap-2 text-sm font-medium">🚿 {p.baths} Bathrooms</span>
+              <span className="flex items-center gap-2 text-sm font-medium">
+                🛏 {p.beds} {isHotel ? "Rooms" : "Bedrooms"}
+              </span>
+              <span className="flex items-center gap-2 text-sm font-medium">
+                🚿 {p.baths} Bathrooms
+              </span>
               {p.size && <span className="flex items-center gap-2 text-sm font-medium">📐 {p.size}</span>}
             </div>
           )}
@@ -301,7 +261,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
 
           <div>
             <h3 className="text-lg font-semibold text-foreground mb-3">Location</h3>
-          <div className="h-48 bg-naija-surface rounded-xl flex flex-col items-center justify-center gap-2.5 border border-border">
+            <div className="h-48 bg-naija-surface rounded-xl flex flex-col items-center justify-center gap-2.5 border border-border">
               <span className="text-3xl">🗺</span>
               <span className="text-sm text-muted-foreground font-medium">{[p.city, p.state, "Nigeria"].filter(Boolean).join(", ")}</span>
               <span className="text-xs text-naija-faint">Exact address shown after booking</span>
@@ -314,45 +274,33 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-primary">
-                  <ShieldCheck size={14} />
-                  NaijaStays Protection
+                  <ShieldCheck size={14} /> NaijaStays Protection
                 </div>
                 <h3 className="mt-3 text-lg font-semibold text-foreground">Trust cover for buyers, renters, and landlords</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Use verified listings, leave a documented offer or booking trail, and open a protection case if anything feels off.
                 </p>
               </div>
-
-              <button
-                onClick={() => openAction("protection")}
-                className="rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-              >
+              <button onClick={() => openAction("protection")} className="rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
                 Open protection case
               </button>
             </div>
-
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               {[
                 "Offers and reservations are logged in the platform",
                 "Admins can investigate payment or access issues",
                 "Landlords and guests both get a clearer audit trail",
               ].map((item) => (
-                <div key={item} className="rounded-2xl border border-white bg-white/80 px-4 py-3 text-sm text-foreground">
-                  {item}
-                </div>
+                <div key={item} className="rounded-2xl border border-white bg-white/80 px-4 py-3 text-sm text-foreground">{item}</div>
               ))}
             </div>
-
-            <button
-              onClick={() => openAction("escrow")}
-              className="mt-4 rounded-full border border-primary/20 bg-white px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/5"
-            >
+            <button onClick={() => openAction("escrow")} className="mt-4 rounded-full border border-primary/20 bg-white px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/5">
               Use NaijaStays escrow instead
             </button>
           </div>
         </div>
 
-        {/* Sidebar — hidden on mobile, shown on desktop */}
+        {/* Sidebar */}
         <div className="hidden lg:block">
           <div className="bg-card border border-primary/10 rounded-2xl p-6 sticky top-20 shadow-[0_24px_50px_-36px_rgba(21,128,61,0.55)]">
             <div className="font-display text-2xl font-semibold text-primary mb-1">
@@ -386,20 +334,13 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
               {user ? (isSale ? "Make an Offer" : "Reserve Now") : "Login to proceed"}
             </button>
 
-            <button
-              onClick={() => openAction("escrow")}
-              className="mb-3 w-full rounded-lg border border-primary/20 bg-secondary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary/80"
-            >
+            <button onClick={() => openAction("escrow")} className="mb-3 w-full rounded-lg border border-primary/20 bg-secondary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary/80">
               Pay through NaijaStays escrow
             </button>
 
             {isSale && (
-              <button
-                onClick={handleBook}
-                className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-secondary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary/80"
-              >
-                <CalendarDays size={15} />
-                Request viewing
+              <button onClick={handleBook} className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-secondary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary/80">
+                <CalendarDays size={15} /> Request viewing
               </button>
             )}
 
@@ -410,23 +351,18 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
             )}
 
             <div className={`grid gap-2 mb-3 ${p.agent_phone ? "grid-cols-2" : "grid-cols-1"}`}>
-              <button
-                onClick={() => openAction("protection")}
-                className="flex items-center justify-center gap-1.5 py-2.5 border border-border rounded-lg text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors"
-              >
+              <button onClick={() => openAction("protection")} className="flex items-center justify-center gap-1.5 py-2.5 border border-border rounded-lg text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">
                 <ShieldCheck size={15} /> Protection
               </button>
               {p.agent_phone && (
-                <button onClick={handleWhatsApp}
-                  className="flex items-center justify-center gap-1.5 py-2.5 bg-primary text-white rounded-lg text-sm font-semibold hover:opacity-90 transition-colors">
+                <button onClick={handleWhatsApp} className="flex items-center justify-center gap-1.5 py-2.5 bg-primary text-white rounded-lg text-sm font-semibold hover:opacity-90 transition-colors">
                   <MessageCircle size={15} /> WhatsApp
                 </button>
               )}
             </div>
 
             {p.agent_phone && (
-              <button onClick={handleCall}
-                className="mb-3 flex w-full items-center justify-center gap-1.5 py-2.5 border border-border rounded-lg text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">
+              <button onClick={handleCall} className="mb-3 flex w-full items-center justify-center gap-1.5 py-2.5 border border-border rounded-lg text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">
                 <Phone size={15} /> Call agent
               </button>
             )}
@@ -448,7 +384,6 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
               </div>
             )}
 
-            {/* Agent */}
             <div className="flex items-center gap-3 mt-5 pt-5 border-t border-border">
               <div className="w-11 h-11 rounded-full bg-secondary flex items-center justify-center text-lg font-bold text-primary shrink-0">
                 {agentName[0]}
@@ -460,10 +395,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
             </div>
 
             {isLiveListing && (
-              <button
-                onClick={() => setProfileOpen(true)}
-                className="mt-3 w-full rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/25 hover:text-primary"
-              >
+              <button onClick={() => setProfileOpen(true)} className="mt-3 w-full rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/25 hover:text-primary">
                 View landlord profile and reviews
               </button>
             )}
@@ -480,14 +412,11 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
       {/* Mobile sticky bottom bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-3 flex items-center gap-2.5 z-30">
         <div className="flex-1">
-          <div className="font-display font-bold text-foreground text-lg leading-tight">
-            {formatFullPrice(p.price)}
-          </div>
+          <div className="font-display font-bold text-foreground text-lg leading-tight">{formatFullPrice(p.price)}</div>
           {p.price_label && <div className="text-xs text-muted-foreground">{p.price_label}</div>}
         </div>
         {p.agent_phone && (
-          <button onClick={handleCall}
-            className="flex items-center gap-1.5 px-4 py-2.5 border border-border rounded-full text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">
+          <button onClick={handleCall} className="flex items-center gap-1.5 px-4 py-2.5 border border-border rounded-full text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">
             <Phone size={14} /> Call
           </button>
         )}
@@ -499,21 +428,14 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
 
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode="login" />
       {actionMode && (
-        <PropertyActionModal
-          mode={actionMode}
-          property={p}
-          onClose={() => setActionMode(null)}
-        />
+        <PropertyActionModal mode={actionMode} property={p} onClose={() => setActionMode(null)} />
       )}
       {profileOpen && isLiveListing && (
         <LandlordProfileModal
           landlordId={p.user_id}
           currentPropertyId={p.id}
           onClose={() => setProfileOpen(false)}
-          onSelectProperty={(property) => {
-            setProfileOpen(false);
-            onSelectProperty(property);
-          }}
+          onSelectProperty={(property) => { setProfileOpen(false); onSelectProperty(property); }}
         />
       )}
     </div>
