@@ -263,33 +263,33 @@ export default function AdminReview() {
     }
   };
 
-  const approvePayment = async (payment: PendingPayment) => {
-    try {
-      setActionKey(`payment-approve-${payment.id}`);
-      const until = new Date();
-      until.setDate(until.getDate() + (PLAN_DURATIONS[payment.plan] || 7));
+const approvePayment = async (payment: PendingPayment) => {
+  try {
+    setActionKey(`payment-approve-${payment.id}`);
+    const until = new Date();
+    until.setDate(until.getDate() + (PLAN_DURATIONS[payment.plan] || 7));
 
-      const { error: propertyError } = await supabase
-        .from("properties")
-        .update({ promoted: true, promoted_until: until.toISOString(), promotion_plan: payment.plan })
-        .eq("id", payment.property_id);
-      if (propertyError) throw propertyError;
+    const { error: propertyError } = await supabase
+      .from("properties")
+      .update({ promoted: true, promoted_until: until.toISOString(), promotion_plan: payment.plan })
+      .eq("id", payment.property_id);
+    if (propertyError) throw propertyError;
 
-      const { error: paymentError } = await supabase
-        .from("promotion_payments")
-        .update({ status: "confirmed" })
-        .eq("id", payment.id);
-      if (paymentError) throw paymentError;
+    const { error: paymentError } = await supabase
+      .from("promotion_payments")
+      .update({ status: "confirmed" })
+      .eq("id", payment.id);
+    if (paymentError) throw paymentError;
 
-      toast.success("Promotion payment approved");
-      await fetchAdminData();
-    } catch (error) {
-      console.error(error);
-      toast.error("Approval failed");
-    } finally {
-      setActionKey(null);
-    }
-  };
+    toast.success("Promotion payment approved");
+    await fetchAdminData(); // ← This re-fetches the list and updates the count
+  } catch (error) {
+    console.error(error);
+    toast.error("Approval failed");
+  } finally {
+    setActionKey(null);
+  }
+};
 
   const rejectPayment = async (payment: PendingPayment) => {
     try {

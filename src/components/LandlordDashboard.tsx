@@ -351,14 +351,53 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
     fetchMyProperties();
   };
 
-  const handleBookingDecision = async (id: string, status: BookingRequestRecord["status"]) => {
-    setActionLoadingKey(`booking-${id}-${status}`);
-    const { error } = await supabase.from("booking_requests").update({ status }).eq("id", id);
-    setActionLoadingKey(null);
-    if (error) { toast.error("Failed to update booking"); return; }
-    toast.success(status === "confirmed" ? "Booking confirmed. Earnings pending admin review." : "Booking declined");
-    fetchMyProperties();
-  };
+ const handleBookingDecision = async (id: string, status: BookingRequestRecord["status"]) => {
+  setActionLoadingKey(`booking-${id}-${status}`);
+  
+  // Fetch booking + property title for the notification
+  const { data: bookingData } = await supabase
+    .from("booking_requests")
+    .select("*, properties(title)")
+    .eq("id", id)
+    .single();
+    
+  const { error } = await supabase
+    .from("booking_requests")
+    .update({ status })
+    .eq("id", id);
+    
+  setActionLoadingKey(null);
+  
+  if (error) { 
+    toast.error("Failed to update booking"); 
+    return; 
+  }
+  
+  if (status === "confirmed" && bookingData) {
+    toast.success("Booking confirmed. Earnings pending admin review.");
+    
+    // Notify guest
+    await notifyUser(
+      bookingData.guest_id,
+      "Booking Confirmed ✅",
+      `Your booking for ${bookingData.properties?.title || "a property"} from ${formatShortDate(bookingData.check_in_date)} has been confirmed.`,
+      "booking",
+      "view_property",
+      { property_id: bookingData.property_id }
+    );
+    
+    // Email guest
+    await sendEmail(
+      bookingData.guest_id,
+      "Your Booking is Confirmed",
+      `<h2>Booking Confirmed!</h2><p>Your stay at <strong>${bookingData.properties?.title || "a property"}</strong> is confirmed. Check-in: ${formatShortDate(bookingData.check_in_date)}.</p>`
+    );
+  } else {
+    toast.success("Booking declined");
+  }
+  
+  fetchMyProperties();
+};
 
   const propertyLookup = new Map(properties.map((p) => [p.id, p]));
   const engagementStats = new Map<string, { clicks: number; views: number }>();

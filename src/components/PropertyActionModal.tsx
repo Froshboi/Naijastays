@@ -68,6 +68,16 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
         });
         if (error) throw error;
         toast.success("Booking request sent! The landlord will respond shortly.");
+        if (property?.user_id) {
+  await notifyUser(
+    property.user_id,
+    "New Offer Received",
+    `Someone offered ${formatFullPrice(offerAmount)} for ${property.title}. Review it in your dashboard.`,
+    "offer",
+    "view_offer",
+    { property_id: property.id }
+  );
+}
       } else if (mode === "protection") {
         const { error } = await supabase.from("protection_cases").insert({
           property_id: property.id,
