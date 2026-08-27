@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Heart, MessageCircle, Phone, Share2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CalendarDays, Heart, MessageCircle, Phone, Share2, ShieldCheck, Star } from "lucide-react";
 import { Property, formatFullPrice } from "@/lib/data";
 import { getListingPrice, getRentalPricingSummary, formatNaira } from "@/lib/pricing";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import AuthModal from "./AuthModal";
 import PropertyActionModal from "./PropertyActionModal";
 import LandlordProfileModal from "./LandlordProfileModal";
+import PropertyMap from "./PropertyMap";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -282,11 +283,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
 
           <div>
             <h3 className="text-lg font-semibold text-foreground mb-3">Location</h3>
-            <div className="h-48 bg-naija-surface rounded-xl flex flex-col items-center justify-center gap-2.5 border border-border">
-              <span className="text-3xl">🗺</span>
-              <span className="text-sm text-muted-foreground font-medium">{[p.city, p.state, "Nigeria"].filter(Boolean).join(", ")}</span>
-              <span className="text-xs text-naija-faint">Exact address shown after booking</span>
-            </div>
+            <PropertyMap address={p.address} city={p.city} state={p.state} />
           </div>
 
           <hr className="border-border my-6" />
@@ -422,8 +419,9 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
             </div>
 
             {isLiveListing && (
-              <button onClick={() => setProfileOpen(true)} className="mt-3 w-full rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-semibold text-foreground transition hover:border-primary/25 hover:text-primary">
-                View landlord profile and reviews
+              <button onClick={() => setProfileOpen(true)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-2.5 text-sm font-semibold text-primary transition hover:border-primary/40 hover:bg-primary/10">
+                <Star size={15} className="fill-amber-400 text-amber-400" />
+                {rating > 0 ? "View reviews or leave a rating" : "Be the first to rate this landlord"}
               </button>
             )}
           </div>

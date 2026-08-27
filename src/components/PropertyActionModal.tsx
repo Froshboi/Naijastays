@@ -170,6 +170,10 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
             { property_id: property.id, booking_id: booking?.id }
           );
         }
+        const { error: adminAlertError } = await supabase.rpc("notify_admins_new_booking", {
+          p_booking_id: booking?.id,
+        });
+        if (adminAlertError) console.error("Admin booking alert failed:", adminAlertError);
 
         toast.success(
           property.property_type === "Hotel" 

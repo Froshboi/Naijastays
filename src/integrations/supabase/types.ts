@@ -872,6 +872,12 @@ export type Database = {
         }
         Returns: Database["public"]["Tables"]["booking_requests"]["Row"]
       }
+      notify_admins_new_booking: {
+        Args: {
+          p_booking_id: string
+        }
+        Returns: number
+      }
       mark_property_unavailable: {
         Args: {
           p_property_id: string

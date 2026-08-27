@@ -63,6 +63,10 @@ interface PayoutRequest {
 
 const formatShortDate = (value: string) =>
   new Intl.DateTimeFormat("en-NG", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+const copyBookingValue = async (label: string, value: string) => {
+  await navigator.clipboard.writeText(value);
+  toast.success(`${label} copied`);
+};
 const CRYPTO_METHODS = [
   { id: "solana", name: "Solana (SOL)", address: "4MN7ZWDAu81U6UVttyRXkfMixXhUxvYnai3KP2yaqe9K", network: "Solana Network", warning: null, minNote: null },
   { id: "btc", name: "Bitcoin (BTC)", address: "bc1qa6ne3p9484t66chvk8pkt48pgkzm70m5rmrzrr", network: "Bitcoin Network", warning: null, minNote: null },
@@ -343,6 +347,12 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
 
   const handleDelete = async (id: string) => { if (!confirm("Delete this property?")) return; const { error } = await supabase.from("properties").delete().eq("id", id); if (error) toast.error("Failed to delete"); else { toast.success("Property deleted"); fetchMyProperties(); } };
   const handleStatusToggle = async (p: Property) => { const next = p.status === "available" ? "booked" : "available"; const { error } = await supabase.from("properties").update({ status: next }).eq("id", p.id); if (error) toast.error("Failed to update status"); else { toast.success(next === "booked" ? "Marked as booked" : "Marked as available"); fetchMyProperties(); } };
+  const handleEndPromotion = async (p: Property) => {
+    if (!window.confirm(`End promotion for "${p.title}"?`)) return;
+    const { error } = await supabase.from("properties").update({ promoted: false, promoted_until: null, promotion_plan: null }).eq("id", p.id);
+    if (error) toast.error("Failed to end promotion");
+    else { toast.success("Promotion ended"); await fetchMyProperties(); }
+  };
 
   const handleOfferDecision = async (offer: OfferRecord, status: OfferRecord["status"]) => {
     const property = properties.find((entry) => entry.id === offer.property_id);
@@ -480,7 +490,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
         {/* Balance & Payout Banner */}
         <div className="mt-4 grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-primary/20 bg-[linear-gradient(135deg,rgba(22,163,74,0.12),rgba(255,255,255,1))] p-5 shadow-[0_18px_42px_-32px_rgba(21,128,61,0.7)]">
-            <div className="flex items-center gap-2 text-primary font-bold text-sm"><Wallet size={16} /> Available Balance</div>
+            <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-2 text-primary font-bold text-sm"><Wallet size={16} /> Available Balance</div><button onClick={() => { void fetchMyProperties(); toast.success("Wallet refreshed"); }} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" title="Refresh wallet"><History size={13} /> Refresh wallet</button></div>
             <div className="mt-2 font-display text-3xl font-semibold text-foreground">{formatFullPrice(balance?.available_balance || 0)}</div>
             <p className="text-xs text-muted-foreground mt-1">Withdraw anytime. Min ₦1,000.</p>
             <button onClick={() => setShowPayoutModal(true)} disabled={(balance?.available_balance || 0) < 1000} className="mt-4 w-full py-2.5 bg-primary text-white rounded-xl font-bold text-sm hover:opacity-90 disabled:opacity-40">Request Payout</button>
@@ -562,6 +572,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
                         <button onClick={() => setPreviewProperty(p)} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Preview"><Eye size={16} /></button>
                         <button onClick={() => setEditProperty(p)} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Edit listing"><Pencil size={16} /></button>
                         <button onClick={() => setPromoteProperty(p)} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition-colors" title="Promote"><Megaphone size={16} /></button>
+                        {p.promoted && <button onClick={() => handleEndPromotion(p)} className="p-2 rounded-lg text-amber-600 hover:bg-amber-50" title="End promotion"><X size={16} /></button>}
                         <button onClick={() => handleDelete(p.id)} className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete"><Trash2 size={16} /></button>
                       </div>
                     </div>
@@ -602,7 +613,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
               <div key={booking.id} className="p-5 space-y-3">
                 <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-foreground">{property?.title || "Booking request"}</div><div className="text-xs text-muted-foreground">{formatShortDate(booking.check_in_date)}{booking.check_out_date ? ` → ${formatShortDate(booking.check_out_date)}` : ""}</div></div><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${booking.status === "confirmed" ? "bg-green-100 text-green-700" : booking.status === "declined" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{booking.status}</span></div>
                 <div className="text-sm text-muted-foreground">{booking.booking_type}{booking.requested_term_months ? ` • ${booking.requested_term_months} months` : ""}{booking.guests_count ? ` • ${booking.guests_count} guest${booking.guests_count === 1 ? "" : "s"}` : ""}</div>
-                {booking.booking_reference && <div className="text-sm font-semibold text-primary">Booking reference: {booking.booking_reference}</div>}
+                {booking.booking_reference && <button onClick={() => copyBookingValue("Booking reference", booking.booking_reference)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:underline"><Copy size={13} /> Booking reference: {booking.booking_reference}</button>}
                 <div className="text-lg font-semibold text-primary">{formatFullPrice(booking.total_quote)}</div>
                 {booking.phone && <div className="text-sm text-muted-foreground">{booking.phone}</div>}
                 {booking.notes && <p className="text-sm text-foreground">{booking.notes}</p>}

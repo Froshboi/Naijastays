@@ -4,7 +4,7 @@ import {
   ArrowLeft, BadgeCheck, Ban, Building2, CheckCircle2, Clock3,
   Eye, Home, Loader2, RefreshCw, ShieldCheck, Sparkles, Tag,
   Trash2, UserCheck, XCircle, Wallet, Banknote, ArrowDownToLine,
-  History, Bell,
+  History, Bell, Copy,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -102,6 +102,11 @@ const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-NG", {
     day: "numeric", month: "short", year: "numeric",
   }).format(new Date(value));
+
+const copyAdminValue = async (label: string, value: string) => {
+  await navigator.clipboard.writeText(value);
+  toast.success(`${label} copied`);
+};
 
 const getPropertyStatusTone = (status: string | null) => {
   if (status === "occupied") return "bg-amber-50 text-amber-700 border-amber-200";
@@ -310,7 +315,7 @@ const approvePayment = async (payment: PendingPayment) => {
     setPendingPayments((current) => current.filter((entry) => entry.id !== payment.id));
     await notifyUser(payment.owner_id, "Promotion payment approved", adminNote.trim() || `Your ${payment.plan} promotion payment for ${payment.property_title} was approved.`, "promotion");
     toast.success("Promotion payment approved");
-    await fetchAdminData(); // ← This re-fetches the list and updates the count
+    void fetchAdminData();
   } catch (error) {
     console.error(error);
     toast.error("Approval failed");
@@ -327,7 +332,7 @@ const approvePayment = async (payment: PendingPayment) => {
       setPendingPayments((current) => current.filter((entry) => entry.id !== payment.id));
       await notifyUser(payment.owner_id, "Promotion payment declined", `Your promotion payment for ${payment.property_title} was declined. Please contact support if you need help.`, "promotion");
       toast.success("Payment rejected");
-      await fetchAdminData();
+      void fetchAdminData();
     } catch (error) {
       console.error(error);
       toast.error("Rejection failed");
@@ -344,7 +349,7 @@ const approvePayment = async (payment: PendingPayment) => {
       if (error) throw error;
       setPendingPayments((current) => current.filter((entry) => entry.id !== payment.id));
       toast.success("Payment deleted");
-      await fetchAdminData();
+      void fetchAdminData();
     } catch (error) {
       console.error(error);
       toast.error("Delete failed");
@@ -1125,8 +1130,11 @@ const approvePayment = async (payment: PendingPayment) => {
                         <div className="rounded-2xl bg-secondary/50 p-4"><div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Stay ends</div><div className="mt-1 text-sm font-semibold text-foreground">{booking.check_out_date ? formatDate(booking.check_out_date) : "Not supplied"}</div></div>
                         <div className="rounded-2xl bg-secondary/50 p-4"><div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Quote</div><div className="mt-1 text-lg font-semibold text-foreground">{formatNaira(booking.total_quote)}</div></div>
                       </div>
-                      {booking.booking_reference && <div className="text-sm font-semibold text-primary">Booking reference: {booking.booking_reference}</div>}
-                      <div className="text-sm text-muted-foreground">{booking.guests_count ? `${booking.guests_count} guest(s)` : ""}{booking.requested_term_months ? ` · ${booking.requested_term_months} month term` : ""}{booking.phone ? ` · ${booking.phone}` : ""}</div>
+                      <div className="flex flex-wrap gap-2 text-sm font-semibold text-primary">
+                        <button onClick={() => copyAdminValue("Booking ID", booking.id)} className="inline-flex items-center gap-1 hover:underline"><Copy size={13} /> ID: {booking.id.slice(0, 8)}...</button>
+                        {booking.booking_reference && <button onClick={() => copyAdminValue("Booking reference", booking.booking_reference)} className="inline-flex items-center gap-1 hover:underline"><Copy size={13} /> Ref: {booking.booking_reference}</button>}
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">{booking.guests_count ? `${booking.guests_count} guest(s)` : ""}{booking.requested_term_months ? ` · ${booking.requested_term_months} month term` : ""}{booking.phone && <button onClick={() => copyAdminValue("Guest phone", booking.phone!)} className="inline-flex items-center gap-1 hover:underline"><Copy size={13} /> {booking.phone}</button>}</div>
                       {booking.notes && <p className="text-sm text-foreground">{booking.notes}</p>}
                     </div>
                     <div className="w-full max-w-sm rounded-3xl border border-border bg-slate-50 p-5">
