@@ -1,5 +1,6 @@
 export interface Property {
   id: string;
+  created_at: string;
   title: string;
   description: string | null;
   writeup: string | null;
@@ -21,6 +22,8 @@ export interface Property {
   agent_name: string | null;
   agent_title: string | null;
   agent_phone: string | null;
+  payment_method?: string | null;
+  payment_details?: string | null;
   video_url?: string | null;
   images: string[] | null;
   user_id: string;

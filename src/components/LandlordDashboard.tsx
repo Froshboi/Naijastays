@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ListPropertyForm from "./ListPropertyForm";
+import { notifyUser, sendEmail } from "@/lib/notifications";
 
 const EDGE_FN = "https://lvntcsobqtgtbnudiwmv.supabase.co/functions/v1/korapay-webhook";
 
@@ -342,13 +343,43 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
   const handleDelete = async (id: string) => { if (!confirm("Delete this property?")) return; const { error } = await supabase.from("properties").delete().eq("id", id); if (error) toast.error("Failed to delete"); else { toast.success("Property deleted"); fetchMyProperties(); } };
   const handleStatusToggle = async (p: Property) => { const next = p.status === "available" ? "booked" : "available"; const { error } = await supabase.from("properties").update({ status: next }).eq("id", p.id); if (error) toast.error("Failed to update status"); else { toast.success(next === "booked" ? "Marked as booked" : "Marked as available"); fetchMyProperties(); } };
 
-  const handleOfferDecision = async (id: string, status: OfferRecord["status"]) => {
-    setActionLoadingKey(`offer-${id}-${status}`);
-    const { error } = await supabase.from("property_offers").update({ status }).eq("id", id);
-    setActionLoadingKey(null);
-    if (error) { toast.error("Failed to update offer"); return; }
-    toast.success(status === "accepted" ? "Offer accepted" : "Offer declined");
-    fetchMyProperties();
+  const handleOfferDecision = async (offer: OfferRecord, status: OfferRecord["status"]) => {
+    const property = properties.find((entry) => entry.id === offer.property_id);
+    setActionLoadingKey(`offer-${offer.id}-${status}`);
+    try {
+      const { error } = await supabase.rpc("resolve_property_offer", {
+        p_offer_id: offer.id,
+        p_status: status,
+      });
+      if (error) throw error;
+
+      const propertyTitle = property?.title || "a property";
+      const accepted = status === "accepted";
+      await notifyUser(
+        offer.buyer_id,
+        accepted ? "Offer accepted" : "Offer declined",
+        `Your offer of ${formatFullPrice(offer.offer_amount)} for ${propertyTitle} was ${accepted ? "accepted" : "declined"}.`,
+        "offer",
+        "view_property",
+        { property_id: offer.property_id, offer_id: offer.id },
+      );
+
+      if (accepted) {
+        await sendEmail(
+          offer.buyer_id,
+          "Your offer was accepted",
+          `<h2>Offer accepted</h2><p>Your offer of ${formatFullPrice(offer.offer_amount)} for <strong>${propertyTitle}</strong> was accepted. Log in to NaijaStays to continue.</p>`,
+        );
+      }
+
+      toast.success(accepted ? "Offer accepted. Buyer notified." : "Offer declined. Buyer notified.");
+      await fetchMyProperties();
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update offer");
+    } finally {
+      setActionLoadingKey(null);
+    }
   };
 
  const handleBookingDecision = async (id: string, status: BookingRequestRecord["status"]) => {
@@ -361,10 +392,10 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
     .eq("id", id)
     .single();
     
-  const { error } = await supabase
-    .from("booking_requests")
-    .update({ status })
-    .eq("id", id);
+  const bookingUpdate = status === "confirmed"
+    ? await supabase.rpc("confirm_booking", { p_booking_id: id })
+    : await supabase.from("booking_requests").update({ status }).eq("id", id);
+  const { data: confirmedBooking, error } = bookingUpdate;
     
   setActionLoadingKey(null);
   
@@ -380,17 +411,17 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
     await notifyUser(
       bookingData.guest_id,
       "Booking Confirmed ✅",
-      `Your booking for ${bookingData.properties?.title || "a property"} from ${formatShortDate(bookingData.check_in_date)} has been confirmed.`,
+      `Booking ${confirmedBooking?.booking_reference || bookingData.booking_reference} for ${bookingData.properties?.title || "a property"} from ${formatShortDate(bookingData.check_in_date)} is confirmed. Contact the property with this reference.`,
       "booking",
       "view_property",
-      { property_id: bookingData.property_id }
+      { property_id: bookingData.property_id, booking_id: bookingData.id, booking_reference: confirmedBooking?.booking_reference || bookingData.booking_reference }
     );
     
     // Email guest
     await sendEmail(
       bookingData.guest_id,
       "Your Booking is Confirmed",
-      `<h2>Booking Confirmed!</h2><p>Your stay at <strong>${bookingData.properties?.title || "a property"}</strong> is confirmed. Check-in: ${formatShortDate(bookingData.check_in_date)}.</p>`
+      `<h2>Booking Confirmed</h2><p>Your reference is <strong>${confirmedBooking?.booking_reference || bookingData.booking_reference}</strong>. Your stay at <strong>${bookingData.properties?.title || "a property"}</strong> is confirmed. Check-in: ${formatShortDate(bookingData.check_in_date)}. Please quote this reference when contacting the property.</p>`
     );
   } else {
     toast.success("Booking declined");
@@ -553,8 +584,8 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
                 {offer.message && <p className="text-sm text-foreground">{offer.message}</p>}
                 {offer.status === "pending" && (
                   <div className="flex gap-2">
-                    <button onClick={() => handleOfferDecision(offer.id, "accepted")} disabled={actionLoadingKey === `offer-${offer.id}-accepted`} className="flex-1 rounded-full bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{actionLoadingKey === `offer-${offer.id}-accepted` ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null} Accept</button>
-                    <button onClick={() => handleOfferDecision(offer.id, "rejected")} disabled={actionLoadingKey === `offer-${offer.id}-rejected`} className="flex-1 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60">{actionLoadingKey === `offer-${offer.id}-rejected` ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null} Decline</button>
+                    <button onClick={() => handleOfferDecision(offer, "accepted")} disabled={actionLoadingKey === `offer-${offer.id}-accepted`} className="flex-1 rounded-full bg-primary px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{actionLoadingKey === `offer-${offer.id}-accepted` ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null} Accept</button>
+                    <button onClick={() => handleOfferDecision(offer, "rejected")} disabled={actionLoadingKey === `offer-${offer.id}-rejected`} className="flex-1 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60">{actionLoadingKey === `offer-${offer.id}-rejected` ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null} Decline</button>
                   </div>
                 )}
               </div>
@@ -569,6 +600,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
               <div key={booking.id} className="p-5 space-y-3">
                 <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-foreground">{property?.title || "Booking request"}</div><div className="text-xs text-muted-foreground">{formatShortDate(booking.check_in_date)}{booking.check_out_date ? ` → ${formatShortDate(booking.check_out_date)}` : ""}</div></div><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${booking.status === "confirmed" ? "bg-green-100 text-green-700" : booking.status === "declined" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>{booking.status}</span></div>
                 <div className="text-sm text-muted-foreground">{booking.booking_type}{booking.requested_term_months ? ` • ${booking.requested_term_months} months` : ""}{booking.guests_count ? ` • ${booking.guests_count} guest${booking.guests_count === 1 ? "" : "s"}` : ""}</div>
+                {booking.booking_reference && <div className="text-sm font-semibold text-primary">Booking reference: {booking.booking_reference}</div>}
                 <div className="text-lg font-semibold text-primary">{formatFullPrice(booking.total_quote)}</div>
                 {booking.phone && <div className="text-sm text-muted-foreground">{booking.phone}</div>}
                 {booking.notes && <p className="text-sm text-foreground">{booking.notes}</p>}

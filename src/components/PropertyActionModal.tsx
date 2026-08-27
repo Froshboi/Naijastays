@@ -61,19 +61,19 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
     setRoomLoadError(null);
     setSelectedRoom(null);
 
-    supabase
-      .from("property_room_types")
-      .select("*")
-      .eq("property_id", property.id)
-      .then(({ data, error }) => {
-        if (error) {
-          setRoomLoadError("Room options are not available yet. The booking can still be sent with the listing rate.");
-          setRoomTypes([]);
-          return;
-        }
+    void (async () => {
+      const { data, error } = await supabase
+        .from("property_room_types")
+        .select("*")
+        .eq("property_id", property.id);
+      if (error) {
+        setRoomLoadError("Room options are not available yet. The booking can still be sent with the listing rate.");
+        setRoomTypes([]);
+      } else {
         setRoomTypes(data || []);
-      })
-      .finally(() => setRoomLoading(false));
+      }
+      setRoomLoading(false);
+    })();
   }, [mode, property.id, property.property_type]);
 
   const nights = useMemo(() => {
@@ -226,28 +226,28 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
   const isRental = property.listing_type === "For Rent";
 
   return (
-    <div className="fixed inset-0 bg-foreground/45 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="bg-card rounded-t-2xl sm:rounded-2xl w-full max-w-[520px] max-h-[calc(100dvh-0.75rem)] sm:max-h-[92dvh] overflow-hidden shadow-xl flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/45 p-2 sm:p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="flex h-[min(90dvh,760px)] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-card shadow-xl">
         
         {/* Sticky Header */}
         <div className="sticky top-0 bg-card border-b border-border z-10">
-          <div className="px-5 sm:px-6 py-4 flex items-center gap-3">
+          <div className="flex items-center gap-2.5 px-4 py-3 sm:gap-3 sm:px-5 sm:py-3.5">
             <img 
               src={property.images?.[0] || "/placeholder.svg"} 
               alt="" 
-              className="w-12 h-12 rounded-lg object-cover bg-muted shrink-0" 
+              className="h-10 w-10 shrink-0 rounded-lg bg-muted object-cover sm:h-11 sm:w-11" 
             />
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-0.5">
+              <div className="mb-0.5 flex items-center gap-1.5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                   {modeLabel}
                 </span>
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                <span className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   {property.property_type} · {property.listing_type}
                 </span>
               </div>
               <h3 className="text-sm font-semibold text-foreground truncate">{property.title}</h3>
-              <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+              <p className="flex truncate items-center gap-1 text-[11px] text-muted-foreground">
                 <MapPin size={10} />
                 {property.city}, {property.state} · {listingPrice.formatted}{listingPrice.label}
               </p>
@@ -258,7 +258,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-5 flex-1 overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom))] sm:pb-6">
+        <form onSubmit={handleSubmit} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:space-y-5 sm:p-5 sm:pb-6">
 
           {/* ==================== OFFER ==================== */}
           {mode === "offer" && (
@@ -542,6 +542,12 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           {/* ==================== ESCROW ==================== */}
           {mode === "escrow" && (
             <div className="space-y-4">
+              {property.payment_method && property.payment_details && (
+                <div className="rounded-xl border border-primary/15 bg-primary/5 p-3.5">
+                  <div className="text-xs font-bold uppercase tracking-wider text-primary">Landlord payment instructions</div>
+                  <p className="mt-1 text-sm text-foreground">{property.payment_details}</p>
+                </div>
+              )}
               <div className="rounded-xl border border-primary/15 bg-primary/5 p-3.5 flex items-start gap-2.5">
                 <ShieldCheck size={16} className="text-primary shrink-0 mt-0.5" />
                 <p className="text-xs text-muted-foreground leading-relaxed">
@@ -597,7 +603,7 @@ export default function PropertyActionModal({ mode, property, onClose }: Props) 
           <button 
             type="submit" 
             disabled={loading}
-            className="sticky bottom-[calc(0.75rem+env(safe-area-inset-bottom))] sm:bottom-0 w-full py-3.5 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2 shadow-[0_18px_38px_-18px_rgba(21,128,61,0.8)]"
+            className="sticky bottom-0 z-10 flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 text-sm font-bold text-primary-foreground shadow-[0_18px_38px_-18px_rgba(21,128,61,0.8)] transition-opacity hover:opacity-90 disabled:opacity-50 sm:bottom-0"
           >
             {loading ? (
               <><Loader2 size={16} className="animate-spin" /> Processing…</>

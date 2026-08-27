@@ -9,15 +9,13 @@ export async function notifyUser(
   actionType: string = "general",
   actionMetadata: Record<string, any> = {}
 ) {
-  const { error } = await supabase.from("notifications").insert({
-    user_id: userId,
-    title,
-    body,
-    type,
-    action_type: actionType,
-    action_metadata: actionMetadata,
-    read: false,
-    email_sent: false,
+  const { error } = await supabase.rpc("create_notification", {
+    p_user_id: userId,
+    p_title: title,
+    p_body: body,
+    p_type: type,
+    p_action_type: actionType,
+    p_action_metadata: actionMetadata,
   });
   if (error) console.error("Notification insert failed:", error);
   return !error;

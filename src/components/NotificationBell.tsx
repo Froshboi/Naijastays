@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Bell, Home, Eye, X, Loader2 } from "lucide-react";
+import { Bell, Home, Eye, X, Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -46,7 +46,13 @@ export default function NotificationBell() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user?.id}` },
-        () => fetchNotifications()
+        (payload) => {
+          const notification = payload.new as Notification;
+          if (typeof window !== "undefined" && "Notification" in window && window.Notification.permission === "granted") {
+            new window.Notification(notification.title, { body: notification.body });
+          }
+          fetchNotifications();
+        }
       )
       .subscribe();
       
@@ -76,6 +82,11 @@ export default function NotificationBell() {
     if (!user) return;
     await supabase.from("notifications").update({ read: true }).eq("user_id", user.id).eq("read", false);
     fetchNotifications();
+  };
+
+  const deleteNotification = async (id: string) => {
+    await supabase.from("notifications").delete().eq("id", id);
+    setNotifications((current) => current.filter((notification) => notification.id !== id));
   };
 
   const handleAction = async (n: Notification) => {
@@ -131,6 +142,13 @@ export default function NotificationBell() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const handleBellClick = async () => {
+    if (typeof window !== "undefined" && "Notification" in window && window.Notification.permission === "default") {
+      await window.Notification.requestPermission();
+    }
+    setOpen(!open);
+  };
+
   const getActionButton = (n: Notification) => {
     if (n.read) return null;
     
@@ -162,7 +180,7 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={bellRef}>
-      <button onClick={() => setOpen(!open)} className="relative p-2 rounded-full hover:bg-secondary transition-colors">
+      <button onClick={handleBellClick} className="relative p-2 rounded-full hover:bg-secondary transition-colors">
         <Bell size={20} className="text-foreground" />
         {unreadCount > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
@@ -192,11 +210,16 @@ export default function NotificationBell() {
                       <div className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleDateString()} • {n.type}</div>
                       {getActionButton(n)}
                     </div>
-                    {!n.read && (
-                      <button onClick={() => markRead(n.id)} className="shrink-0 p-1 rounded-full hover:bg-secondary text-muted-foreground" title="Mark read">
-                        <X size={14} />
+                    <div className="flex shrink-0 items-start gap-1">
+                      {!n.read && (
+                        <button onClick={() => markRead(n.id)} className="p-1 rounded-full hover:bg-secondary text-muted-foreground" title="Mark read">
+                          <X size={14} />
+                        </button>
+                      )}
+                      <button onClick={() => deleteNotification(n.id)} className="p-1 rounded-full hover:bg-red-50 text-muted-foreground hover:text-red-600" title="Delete notification">
+                        <Trash2 size={14} />
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               ))

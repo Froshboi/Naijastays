@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { notifyUser } from "@/lib/notifications";
 
 type AdminDashboardRow = Tables<"admin_dashboard">;
 type PropertyRecord = Tables<"properties">;
@@ -125,12 +126,6 @@ const sendEmail = async (to: string, subject: string, html: string) => {
   }
 };
 
-// Insert in-app notification
-const notifyUser = async (userId: string, title: string, body: string, type: string = "general") => {
-  await supabase.from("notifications").insert({
-    user_id: userId, title, body, type,
-  });
-};
 export default function AdminReview() {
   const navigate = useNavigate();
   const { roles, loading: authLoading } = useAuth();
@@ -155,6 +150,10 @@ export default function AdminReview() {
   const [escrowPayments, setEscrowPayments] = useState<EscrowPaymentRecord[]>([]);
   const [balanceTransactions, setBalanceTransactions] = useState<BalanceTransaction[]>([]);
   const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
+  const [broadcastAudience, setBroadcastAudience] = useState<"everyone" | "landlords" | "users">("everyone");
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcasting, setBroadcasting] = useState(false);
 
   const fetchAdminData = async () => {
     try {
@@ -243,6 +242,32 @@ export default function AdminReview() {
       fetchAdminData();
     }
   }, [authLoading, isAdmin]);
+
+  const sendBroadcast = async () => {
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) {
+      toast.error("Add a title and message first");
+      return;
+    }
+
+    try {
+      setBroadcasting(true);
+      const { data, error } = await supabase.rpc("broadcast_notification", {
+        p_audience: broadcastAudience,
+        p_title: broadcastTitle.trim(),
+        p_body: broadcastBody.trim(),
+      });
+      if (error) throw error;
+      toast.success(`Notification sent to ${data ?? 0} users`);
+      setBroadcastTitle("");
+      setBroadcastBody("");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not send notification");
+    } finally {
+      setBroadcasting(false);
+    }
+  };
+
     const runPropertyUpdate = async (
     propertyId: string,
     updates: Partial<PropertyRecord>,
@@ -266,6 +291,7 @@ export default function AdminReview() {
 const approvePayment = async (payment: PendingPayment) => {
   try {
     setActionKey(`payment-approve-${payment.id}`);
+    const adminNote = window.prompt("Optional approval note for the landlord:", "") ?? "";
     const until = new Date();
     until.setDate(until.getDate() + (PLAN_DURATIONS[payment.plan] || 7));
 
@@ -277,10 +303,12 @@ const approvePayment = async (payment: PendingPayment) => {
 
     const { error: paymentError } = await supabase
       .from("promotion_payments")
-      .update({ status: "confirmed" })
+      .update({ status: "confirmed", admin_note: adminNote.trim() || null })
       .eq("id", payment.id);
     if (paymentError) throw paymentError;
 
+    setPendingPayments((current) => current.filter((entry) => entry.id !== payment.id));
+    await notifyUser(payment.owner_id, "Promotion payment approved", adminNote.trim() || `Your ${payment.plan} promotion payment for ${payment.property_title} was approved.`, "promotion");
     toast.success("Promotion payment approved");
     await fetchAdminData(); // ← This re-fetches the list and updates the count
   } catch (error) {
@@ -296,6 +324,8 @@ const approvePayment = async (payment: PendingPayment) => {
       setActionKey(`payment-reject-${payment.id}`);
       const { error } = await supabase.from("promotion_payments").update({ status: "failed" }).eq("id", payment.id);
       if (error) throw error;
+      setPendingPayments((current) => current.filter((entry) => entry.id !== payment.id));
+      await notifyUser(payment.owner_id, "Promotion payment declined", `Your promotion payment for ${payment.property_title} was declined. Please contact support if you need help.`, "promotion");
       toast.success("Payment rejected");
       await fetchAdminData();
     } catch (error) {
@@ -312,6 +342,7 @@ const approvePayment = async (payment: PendingPayment) => {
       setActionKey(`payment-delete-${payment.id}`);
       const { error } = await supabase.from("promotion_payments").delete().eq("id", payment.id);
       if (error) throw error;
+      setPendingPayments((current) => current.filter((entry) => entry.id !== payment.id));
       toast.success("Payment deleted");
       await fetchAdminData();
     } catch (error) {
@@ -647,6 +678,14 @@ const approvePayment = async (payment: PendingPayment) => {
               {tab.label}
             </button>
           ))}
+        </div>
+
+        <div className="mt-6 rounded-[28px] border border-primary/15 bg-white p-5 shadow-[0_20px_55px_-40px_rgba(15,23,42,0.35)]">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+            <div className="min-w-0 flex-1"><div className="text-xs font-bold uppercase tracking-[0.2em] text-primary">Communication</div><div className="mt-1 text-sm text-muted-foreground">Send an update to everyone, landlords, or users.</div></div>
+            <select value={broadcastAudience} onChange={(event) => setBroadcastAudience(event.target.value as typeof broadcastAudience)} className="h-11 rounded-xl border border-border bg-white px-3 text-sm font-semibold text-foreground"><option value="everyone">Everyone</option><option value="landlords">Landlords only</option><option value="users">Users only</option></select>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-[0.8fr_1.6fr_auto] lg:items-end"><input value={broadcastTitle} onChange={(event) => setBroadcastTitle(event.target.value)} placeholder="Notification title" className="h-11 rounded-xl border border-border bg-secondary/30 px-3 text-sm outline-none focus:border-primary" /><textarea value={broadcastBody} onChange={(event) => setBroadcastBody(event.target.value)} placeholder="Write your update..." rows={2} className="rounded-xl border border-border bg-secondary/30 px-3 py-2.5 text-sm outline-none focus:border-primary" /><button onClick={sendBroadcast} disabled={broadcasting} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">{broadcasting ? <Loader2 size={16} className="animate-spin" /> : <Bell size={16} />} Send now</button></div>
         </div>
                 {/* OVERVIEW TAB */}
         {activeTab === "overview" && (
@@ -1028,24 +1067,26 @@ const approvePayment = async (payment: PendingPayment) => {
                       <div className="mt-4 space-y-3">
                         <button onClick={async () => {
                           setActionKey(`offer-${offer.id}-accepted`);
-                          const { error } = await supabase.from("property_offers").update({ status: "accepted" }).eq("id", offer.id);
+                          const { error } = await supabase.rpc("resolve_property_offer", { p_offer_id: offer.id, p_status: "accepted" });
                           setActionKey(null);
                           if (error) { toast.error("Failed to accept offer"); return; }
+                          setOffers((current) => current.filter((entry) => entry.id !== offer.id));
                           await notifyUser(offer.buyer_id, "Offer Accepted", `Your offer of ${formatNaira(offer.offer_amount)} for ${property?.title || "a property"} has been accepted.`, "offer");
                           await sendEmail(offer.buyer_id, "Your Offer Was Accepted", `<h2>Congratulations!</h2><p>Your offer of ${formatNaira(offer.offer_amount)} for <strong>${property?.title || "a property"}</strong> has been accepted.</p>`);
                           toast.success("Offer accepted. Buyer notified.");
-                          fetchAdminData();
+                          await fetchAdminData();
                         }} disabled={actionKey === `offer-${offer.id}-accepted`} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                           {actionKey === `offer-${offer.id}-accepted` ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Accept offer
                         </button>
                         <button onClick={async () => {
                           setActionKey(`offer-${offer.id}-rejected`);
-                          const { error } = await supabase.from("property_offers").update({ status: "rejected" }).eq("id", offer.id);
+                          const { error } = await supabase.rpc("resolve_property_offer", { p_offer_id: offer.id, p_status: "rejected" });
                           setActionKey(null);
                           if (error) { toast.error("Failed to reject offer"); return; }
+                          setOffers((current) => current.filter((entry) => entry.id !== offer.id));
                           await notifyUser(offer.buyer_id, "Offer Update", `Your offer of ${formatNaira(offer.offer_amount)} for ${property?.title || "a property"} was not accepted.`, "offer");
                           toast.success("Offer rejected. Buyer notified.");
-                          fetchAdminData();
+                          await fetchAdminData();
                         }} disabled={actionKey === `offer-${offer.id}-rejected`} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60">
                           {actionKey === `offer-${offer.id}-rejected` ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />} Reject offer
                         </button>
@@ -1084,6 +1125,7 @@ const approvePayment = async (payment: PendingPayment) => {
                         <div className="rounded-2xl bg-secondary/50 p-4"><div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Stay ends</div><div className="mt-1 text-sm font-semibold text-foreground">{booking.check_out_date ? formatDate(booking.check_out_date) : "Not supplied"}</div></div>
                         <div className="rounded-2xl bg-secondary/50 p-4"><div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Quote</div><div className="mt-1 text-lg font-semibold text-foreground">{formatNaira(booking.total_quote)}</div></div>
                       </div>
+                      {booking.booking_reference && <div className="text-sm font-semibold text-primary">Booking reference: {booking.booking_reference}</div>}
                       <div className="text-sm text-muted-foreground">{booking.guests_count ? `${booking.guests_count} guest(s)` : ""}{booking.requested_term_months ? ` · ${booking.requested_term_months} month term` : ""}{booking.phone ? ` · ${booking.phone}` : ""}</div>
                       {booking.notes && <p className="text-sm text-foreground">{booking.notes}</p>}
                     </div>
@@ -1092,13 +1134,14 @@ const approvePayment = async (payment: PendingPayment) => {
                       <div className="mt-4 space-y-3">
                         <button onClick={async () => {
                           setActionKey(`booking-${booking.id}-confirmed`);
-                          const { error } = await supabase.from("booking_requests").update({ status: "confirmed" }).eq("id", booking.id);
+                          const { data: confirmedBooking, error } = await supabase.rpc("confirm_booking", { p_booking_id: booking.id });
                           setActionKey(null);
                           if (error) { toast.error("Failed to confirm booking"); return; }
-                          await notifyUser(booking.guest_id, "Booking Confirmed", `Your booking for ${property?.title || "a property"} has been confirmed.`, "booking");
-                          await sendEmail(booking.guest_id, "Your Booking is Confirmed", `<h2>Booking Confirmed!</h2><p>Your booking for <strong>${property?.title || "a property"}</strong> has been confirmed. Check-in: ${formatDate(booking.check_in_date)}.</p>`);
+                          setBookingRequests((current) => current.filter((entry) => entry.id !== booking.id));
+                          await notifyUser(booking.guest_id, "Booking Confirmed", `Booking ${confirmedBooking?.booking_reference || booking.booking_reference} for ${property?.title || "a property"} is confirmed. Quote this reference when contacting the property.`, "booking");
+                          await sendEmail(booking.guest_id, "Your Booking is Confirmed", `<h2>Booking Confirmed</h2><p>Your booking reference is <strong>${confirmedBooking?.booking_reference || booking.booking_reference}</strong>. Your booking for <strong>${property?.title || "a property"}</strong> has been confirmed. Check-in: ${formatDate(booking.check_in_date)}.</p>`);
                           toast.success("Booking confirmed. Guest notified.");
-                          fetchAdminData();
+                          await fetchAdminData();
                         }} disabled={actionKey === `booking-${booking.id}-confirmed`} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">
                           {actionKey === `booking-${booking.id}-confirmed` ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Confirm booking
                         </button>
@@ -1107,9 +1150,10 @@ const approvePayment = async (payment: PendingPayment) => {
                           const { error } = await supabase.from("booking_requests").update({ status: "declined" }).eq("id", booking.id);
                           setActionKey(null);
                           if (error) { toast.error("Failed to decline booking"); return; }
+                          setBookingRequests((current) => current.filter((entry) => entry.id !== booking.id));
                           await notifyUser(booking.guest_id, "Booking Update", `Your booking request for ${property?.title || "a property"} was declined.`, "booking");
                           toast.success("Booking declined. Guest notified.");
-                          fetchAdminData();
+                          await fetchAdminData();
                         }} disabled={actionKey === `booking-${booking.id}-declined`} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60">
                           {actionKey === `booking-${booking.id}-declined` ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />} Decline booking
                         </button>

@@ -88,6 +88,7 @@ export type Database = {
           id: string
           images: string[] | null
           listing_type: string
+          unit_type: string | null
           price: number
           price_label: string | null
           status: string | null
@@ -103,6 +104,8 @@ export type Database = {
           promoted: boolean | null
           promoted_until: string | null
           promotion_plan: string | null
+          payment_method: string | null
+          payment_details: string | null
           video_url: string | null
           writeup: string | null
         }
@@ -120,6 +123,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           listing_type?: string
+          unit_type?: string | null
           price?: number
           price_label?: string | null
           status?: string | null
@@ -129,6 +133,8 @@ export type Database = {
           promoted?: boolean | null
           promoted_until?: string | null
           promotion_plan?: string | null
+          payment_method?: string | null
+          payment_details?: string | null
           size?: string | null
           state?: string | null
           title: string
@@ -152,6 +158,7 @@ export type Database = {
           id?: string
           images?: string[] | null
           listing_type?: string
+          unit_type?: string | null
           price?: number
           price_label?: string | null
           status?: string | null
@@ -161,6 +168,8 @@ export type Database = {
           promoted?: boolean | null
           promoted_until?: string | null
           promotion_plan?: string | null
+          payment_method?: string | null
+          payment_details?: string | null
           size?: string | null
           state?: string | null
           title?: string
@@ -192,6 +201,7 @@ export type Database = {
       }
       promotion_payments: {
         Row: {
+          admin_note: string | null
           amount_naira: number
           created_at: string
           id: string
@@ -204,6 +214,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          admin_note?: string | null
           amount_naira: number
           created_at?: string
           id?: string
@@ -216,6 +227,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          admin_note?: string | null
           amount_naira?: number
           created_at?: string
           id?: string
@@ -319,7 +331,9 @@ export type Database = {
       }
       booking_requests: {
         Row: {
+          booking_reference: string
           booking_type: string
+          room_type_id: string | null
           check_in_date: string
           check_out_date: string | null
           created_at: string
@@ -336,7 +350,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          booking_reference?: string
           booking_type: string
+          room_type_id?: string | null
           check_in_date: string
           check_out_date?: string | null
           created_at?: string
@@ -353,7 +369,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          booking_reference?: string
           booking_type?: string
+          room_type_id?: string | null
           check_in_date?: string
           check_out_date?: string | null
           created_at?: string
@@ -378,6 +396,159 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      property_room_types: {
+        Row: {
+          id: string
+          property_id: string
+          name: string
+          description: string | null
+          price_per_night: number
+          max_guests: number
+          bed_count: number
+          available_count: number
+          total_count: number
+          amenities: string[]
+          images: string[] | null
+          cancellation_policy: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          property_id: string
+          name: string
+          description?: string | null
+          price_per_night: number
+          max_guests?: number
+          bed_count?: number
+          available_count?: number
+          total_count?: number
+          amenities?: string[]
+          images?: string[] | null
+          cancellation_policy?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          property_id?: string
+          name?: string
+          description?: string | null
+          price_per_night?: number
+          max_guests?: number
+          bed_count?: number
+          available_count?: number
+          total_count?: number
+          amenities?: string[]
+          images?: string[] | null
+          cancellation_policy?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      landlord_balances: {
+        Row: {
+          user_id: string
+          available_balance: number
+          pending_balance: number
+          total_earned: number
+          total_withdrawn: number
+        }
+        Insert: {
+          user_id: string
+          available_balance?: number
+          pending_balance?: number
+          total_earned?: number
+          total_withdrawn?: number
+        }
+        Update: {
+          user_id?: string
+          available_balance?: number
+          pending_balance?: number
+          total_earned?: number
+          total_withdrawn?: number
+        }
+        Relationships: []
+      }
+      landlord_balance_transactions: {
+        Row: {
+          id: string
+          landlord_id: string
+          booking_id: string | null
+          property_id: string
+          amount: number
+          type: string
+          status: string
+          admin_note: string | null
+          created_at: string
+          processed_at: string | null
+          properties?: { title: string } | null
+          profiles?: { full_name: string | null } | null
+        }
+        Insert: {
+          id?: string
+          landlord_id: string
+          booking_id?: string | null
+          property_id: string
+          amount: number
+          type: string
+          status?: string
+          admin_note?: string | null
+          created_at?: string
+          processed_at?: string | null
+        }
+        Update: {
+          id?: string
+          landlord_id?: string
+          booking_id?: string | null
+          property_id?: string
+          amount?: number
+          type?: string
+          status?: string
+          admin_note?: string | null
+          created_at?: string
+          processed_at?: string | null
+        }
+        Relationships: []
+      }
+      payout_requests: {
+        Row: {
+          id: string
+          landlord_id: string
+          amount: number
+          status: string
+          method: string | null
+          account_details: Json
+          admin_note: string | null
+          created_at: string
+          processed_at: string | null
+          profiles?: { full_name: string | null; phone: string | null } | null
+        }
+        Insert: {
+          id?: string
+          landlord_id: string
+          amount: number
+          status?: string
+          method?: string | null
+          account_details?: Json
+          admin_note?: string | null
+          created_at?: string
+          processed_at?: string | null
+        }
+        Update: {
+          id?: string
+          landlord_id?: string
+          amount?: number
+          status?: string
+          method?: string | null
+          account_details?: Json
+          admin_note?: string | null
+          created_at?: string
+          processed_at?: string | null
+        }
+        Relationships: []
       }
       protection_cases: {
         Row: {
@@ -605,6 +776,48 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          action_metadata: Json
+          action_type: string
+          body: string
+          created_at: string
+          email_sent: boolean
+          email_sent_at: string | null
+          id: string
+          read: boolean
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          action_metadata?: Json
+          action_type?: string
+          body: string
+          created_at?: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          id?: string
+          read?: boolean
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          action_metadata?: Json
+          action_type?: string
+          body?: string
+          created_at?: string
+          email_sent?: boolean
+          email_sent_at?: string | null
+          id?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       admin_dashboard: {
@@ -628,6 +841,70 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
         }
         Returns: boolean
+      }
+      create_notification: {
+        Args: {
+          p_action_metadata?: Json
+          p_action_type?: string
+          p_body: string
+          p_title: string
+          p_type?: string
+          p_user_id: string
+        }
+        Returns: Database["public"]["Tables"]["notifications"]["Row"]
+      }
+      notify_new_listing: {
+        Args: {
+          p_property_id: string
+        }
+        Returns: number
+      }
+      resolve_property_offer: {
+        Args: {
+          p_offer_id: string
+          p_status: Database["public"]["Enums"]["property_offer_status"]
+        }
+        Returns: Database["public"]["Tables"]["property_offers"]["Row"]
+      }
+      confirm_booking: {
+        Args: {
+          p_booking_id: string
+        }
+        Returns: Database["public"]["Tables"]["booking_requests"]["Row"]
+      }
+      mark_property_unavailable: {
+        Args: {
+          p_property_id: string
+          p_landlord_id: string
+        }
+        Returns: boolean
+      }
+      approve_landlord_credit: {
+        Args: {
+          p_transaction_id: string
+        }
+        Returns: boolean
+      }
+      reject_landlord_credit: {
+        Args: {
+          p_transaction_id: string
+        }
+        Returns: boolean
+      }
+      process_landlord_payout: {
+        Args: {
+          p_payout_id: string
+          p_status: string
+        }
+        Returns: boolean
+      }
+      broadcast_notification: {
+        Args: {
+          p_audience: string
+          p_body: string
+          p_title: string
+        }
+        Returns: number
       }
     }
     Enums: {

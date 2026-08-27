@@ -111,6 +111,8 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
     agent_name: "",
     agent_title: "",
     agent_phone: "",
+    payment_method: "",
+    payment_details: "",
   });
 
   const [amenities, setAmenities] = useState<string[]>([]);
@@ -274,6 +276,8 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
       if (!form.address.trim()) return "Address is required";
       if (!form.agent_name.trim()) return "Agent name is required";
       if (!form.agent_phone.trim()) return "Agent phone is required";
+      if (!form.payment_method) return "Select how customers should pay";
+      if (!form.payment_details.trim()) return "Add payment or escrow instructions";
     }
     if (step === 2) {
       if (images.length === 0) return "At least 1 property photo is required";
@@ -354,6 +358,8 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
           agent_name: form.agent_name,
           agent_title: form.agent_title,
           agent_phone: form.agent_phone,
+          payment_method: form.payment_method,
+          payment_details: form.payment_details,
           images: imageUrls,
           video_url: videoUrl || null,
           status: "available",
@@ -386,6 +392,11 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
 
         if (roomsError) throw roomsError;
       }
+
+      const { error: notificationError } = await supabase.rpc("notify_new_listing", {
+        p_property_id: property.id,
+      });
+      if (notificationError) console.error("Listing alert delivery failed:", notificationError);
 
       toast.success(
         isHotel 
@@ -577,6 +588,20 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-primary mb-1">Payment instructions</p>
+                <p className="text-xs text-muted-foreground mb-3">Choose how interested customers should pay or contact you. Never put a password or secret here.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select name="payment_method" value={form.payment_method} onChange={handleChange} required className="w-full px-3.5 py-2.5 border border-border rounded-lg text-sm bg-card">
+                    <option value="">Select payment method *</option>
+                    <option value="naijastays_escrow">NaijaStays escrow</option>
+                    <option value="bank_transfer">Bank transfer</option>
+                    <option value="contact_first">Contact me first</option>
+                  </select>
+                  <input name="payment_details" value={form.payment_details} onChange={handleChange} required placeholder="Account name/number or contact instructions" className="w-full px-3.5 py-2.5 border border-border rounded-lg text-sm bg-card" />
                 </div>
               </div>
             </div>
