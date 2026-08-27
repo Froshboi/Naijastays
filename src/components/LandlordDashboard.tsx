@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import ListPropertyForm from "./ListPropertyForm";
 import ProfileSettings from "./ProfileSettings";
+import ListingMessageModal from "./ListingMessageModal";
 import { notifyUser, sendEmail } from "@/lib/notifications";
 
 const EDGE_FN = "https://lvntcsobqtgtbnudiwmv.supabase.co/functions/v1/korapay-webhook";
@@ -41,6 +42,7 @@ interface ListingMessageRecord {
   status: "open" | "reviewing" | "resolved" | "dismissed";
   admin_note: string | null;
   created_at: string;
+  parent_id?: string | null;
 }
 
 interface BalanceData {
@@ -317,6 +319,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
   const [promoteProperty, setPromoteProperty] = useState<Property | null>(null);
   const [editProperty, setEditProperty] = useState<Property | null>(null);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [openMessage, setOpenMessage] = useState<{ message: ListingMessageRecord; property: Property } | null>(null);
 
   const fetchMyProperties = useCallback(async () => {
     if (!user) return;
@@ -342,7 +345,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
       supabase.from("property_engagement_events").select("*").in("property_id", propertyIds),
       supabase.from("escrow_payments").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
       supabase.from("landlord_reviews").select("*").eq("landlord_id", user.id).eq("status", "published").order("created_at", { ascending: false }),
-      (supabase as any).from("listing_messages").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
+      (supabase as any).from("listing_messages").select("*").eq("landlord_id", user.id).is("parent_id", null).order("created_at", { ascending: false }),
       supabase.from("landlord_balances").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("landlord_balance_transactions").select("*, properties(title)").eq("landlord_id", user.id).order("created_at", { ascending: false }),
       supabase.from("payout_requests").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
@@ -666,6 +669,11 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
                   {message.phone && <button onClick={() => copyBookingValue("Message phone", message.phone!)} className="font-semibold text-primary hover:underline">{message.phone}</button>}
                 </div>
                 {message.admin_note && <p className="rounded-xl bg-primary/5 p-3 text-xs text-primary">Admin note: {message.admin_note}</p>}
+                {message.kind === "landlord_chat" && property && (
+                  <button onClick={() => setOpenMessage({ message, property })} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:opacity-90">
+                    <MessageSquare size={13} /> Open Chat
+                  </button>
+                )}
               </div>
             ); })}
           </div>
@@ -765,6 +773,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
       {previewProperty && <PreviewModal property={previewProperty} onClose={() => setPreviewProperty(null)} />}
       {promoteProperty && <PromoteModal property={promoteProperty} userId={user!.id} userEmail={user?.email ?? ""} userName={profile?.full_name ?? ""} onClose={() => { setPromoteProperty(null); fetchMyProperties(); }} />}
       {showPayoutModal && balance && <PayoutModal balance={balance} onClose={() => setShowPayoutModal(false)} onSuccess={fetchMyProperties} />}
+      {openMessage && <ListingMessageModal property={openMessage.property} mode="landlord_chat" initialThreadId={openMessage.message.id} onClose={() => { setOpenMessage(null); void fetchMyProperties(); }} />}
     </div>
   );
 }

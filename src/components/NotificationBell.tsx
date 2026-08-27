@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Bell, Home, Eye, X, Loader2, Trash2 } from "lucide-react";
+import { Bell, Home, Eye, X, Loader2, Trash2, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -28,12 +28,16 @@ export default function NotificationBell() {
 
   const fetchNotifications = async () => {
     if (!user) return;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("notifications")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20);
+    if (error) {
+      console.error("Failed to load notifications:", error);
+      return;
+    }
     setNotifications(data || []);
   };
 
@@ -55,7 +59,13 @@ export default function NotificationBell() {
         (payload) => {
           const notification = payload.new as Notification;
           if (typeof window !== "undefined" && "Notification" in window && window.Notification.permission === "granted") {
-            new window.Notification(notification.title, { body: notification.body });
+            void navigator.serviceWorker.ready
+              .then((registration) => registration.showNotification(notification.title, {
+                body: notification.body,
+                data: notification.action_metadata,
+                tag: notification.id,
+              }))
+              .catch((error) => console.error("Browser notification failed:", error));
           }
           fetchNotifications();
         }
@@ -66,6 +76,38 @@ export default function NotificationBell() {
       clearInterval(interval);
       channel.unsubscribe();
     };
+  }, [user?.id]);
+
+  useEffect(() => {
+    const publicKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+    if (!user || !publicKey || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    const registerPush = async () => {
+      try {
+        const permission = Notification.permission === "granted"
+          ? "granted"
+          : await Notification.requestPermission();
+        if (permission !== "granted") return;
+        const registration = await navigator.serviceWorker.ready;
+        const existing = await registration.pushManager.getSubscription();
+        const normalizedKey = publicKey.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(publicKey.length / 4) * 4, "=");
+        const subscription = existing || await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: Uint8Array.from(atob(normalizedKey), (char) => char.charCodeAt(0)),
+        });
+        const json = subscription.toJSON();
+        if (!json.endpoint || !json.keys?.p256dh || !json.keys.auth) return;
+        const { error } = await (supabase as any).from("push_subscriptions").upsert({
+          user_id: user.id,
+          endpoint: json.endpoint,
+          p256dh: json.keys.p256dh,
+          auth: json.keys.auth,
+        }, { onConflict: "endpoint" });
+        if (error) throw error;
+      } catch (error) {
+        console.error("Push subscription failed:", error);
+      }
+    };
+    void registerPush();
   }, [user?.id]);
 
   // Close on outside click
@@ -80,7 +122,11 @@ export default function NotificationBell() {
   }, []);
 
   const markRead = async (id: string) => {
-    await supabase.from("notifications").update({ read: true }).eq("id", id);
+    const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id);
+    if (error) {
+      console.error("Failed to mark notification read:", error);
+      return;
+    }
     fetchNotifications();
   };
 
@@ -121,6 +167,13 @@ export default function NotificationBell() {
         case "view_property": {
           const propertyId = n.action_metadata?.property_id;
           if (propertyId) navigate(`/?listing=${propertyId}`);
+          setOpen(false);
+          break;
+        }
+        case "open_chat_thread": {
+          const propertyId = n.action_metadata?.property_id;
+          const threadId = n.action_metadata?.thread_id;
+          if (propertyId) navigate(`/?listing=${propertyId}&chat=open${threadId ? `&thread=${threadId}` : ""}`);
           setOpen(false);
           break;
         }
@@ -184,6 +237,12 @@ export default function NotificationBell() {
             <Eye size={12} /> View Property
           </button>
         );
+      case "open_chat_thread":
+        return (
+        <button onClick={() => handleAction(n)} className="mt-2 flex items-center gap-1.5 rounded-lg border border-primary/20 bg-secondary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-secondary/80">
+          <MessageSquare size={12} /> Open Chat
+        </button>
+        );
       case "view_offer":
       case "review_booking":
       case "confirm_booking":
@@ -230,7 +289,7 @@ export default function NotificationBell() {
               notifications.map((n) => (
                 <div key={n.id} className={`px-4 py-3 border-b border-border last:border-0 transition-colors ${n.read ? 'bg-white' : 'bg-secondary/30'}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <button onClick={() => expandNotification(n)} className="flex-1 min-w-0 text-left">
+                    <button onClick={() => n.action_type === "open_chat_thread" ? handleAction(n) : expandNotification(n)} className="flex-1 min-w-0 text-left">
                       <div className="text-sm font-semibold text-foreground">{n.title}</div>
                       <div className={`mt-0.5 text-xs text-muted-foreground break-words ${expandedId === n.id ? "whitespace-pre-wrap" : "line-clamp-3"}`}>{n.body}</div>
                       <div className="mt-1 text-[10px] font-semibold text-primary">{expandedId === n.id ? "Click to collapse" : "Click to read full message"}</div>

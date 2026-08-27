@@ -3,6 +3,7 @@ import { Property, formatFullPrice } from "@/lib/data";
 import { getListingPrice, getRentalPricingSummary, formatNaira } from "@/lib/pricing";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import AuthModal from "./AuthModal";
 import PropertyActionModal from "./PropertyActionModal";
 import LandlordProfileModal from "./LandlordProfileModal";
@@ -57,9 +58,11 @@ function AutoPreviewVideo({ src, className }: { src: string; className: string }
 
 export default function PropertyDetail({ property: p, isFavorite, onFavorite, onBack, onSelectProperty }: Props) {
   const { user } = useAuth();
+  const location = useLocation();
   const [authOpen, setAuthOpen] = useState(false);
   const [actionMode, setActionMode] = useState<"offer" | "booking" | "protection" | "escrow" | null>(null);
   const [messageMode, setMessageMode] = useState<ListingMessageMode | null>(null);
+  const [chatThreadId, setChatThreadId] = useState<string | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [landlordProfile, setLandlordProfile] = useState<{ full_name: string | null; phone: string | null; avatar_url: string | null } | null>(null);
   const [landlordStats, setLandlordStats] = useState({ listings: 0, reviews: 0, rating: 0 });
@@ -115,6 +118,19 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
   }, [isLiveListing, p.user_id]);
 
   useEffect(() => { setImgIdx(0); }, [p.id]);
+
+  useEffect(() => {
+    if (!isLiveListing || !user || typeof window === "undefined") return;
+    const params = new URLSearchParams(location.search);
+    if (params.get("chat") === "open") {
+      setChatThreadId(params.get("thread"));
+      setMessageMode("landlord_chat");
+      params.delete("chat");
+      params.delete("thread");
+      const nextQuery = params.toString();
+      window.history.replaceState({}, "", `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}`);
+    }
+  }, [isLiveListing, location.search, p.id, user?.id]);
 
   const handleImageError = (event: React.SyntheticEvent<HTMLImageElement>) => {
     event.currentTarget.onerror = null;
@@ -535,7 +551,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
         <PropertyActionModal mode={actionMode} property={p} onClose={() => setActionMode(null)} />
       )}
       {messageMode && (
-        <ListingMessageModal property={p} mode={messageMode} onClose={() => setMessageMode(null)} />
+        <ListingMessageModal property={p} mode={messageMode} initialThreadId={chatThreadId} onClose={() => { setMessageMode(null); setChatThreadId(null); }} />
       )}
       {profileOpen && isLiveListing && (
         <LandlordProfileModal
