@@ -7,7 +7,7 @@ import {
   Trash2, Plus, Eye, ArrowLeft, Megaphone, X,
   Star, Zap, TrendingUp, CheckCircle, Wallet, Banknote,
   Bitcoin, ArrowDownToLine, History, Loader2, Bell,
-  Copy, Upload
+  Copy, Upload, Pencil
 } from "lucide-react";
 import { toast } from "sonner";
 import ListPropertyForm from "./ListPropertyForm";
@@ -294,6 +294,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
   const [showListForm, setShowListForm] = useState(false);
   const [previewProperty, setPreviewProperty] = useState<Property | null>(null);
   const [promoteProperty, setPromoteProperty] = useState<Property | null>(null);
+  const [editProperty, setEditProperty] = useState<Property | null>(null);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
 
   const fetchMyProperties = useCallback(async () => {
@@ -559,6 +560,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
                       <div className="flex items-center gap-1.5 shrink-0 xl:pt-1">
                         <button onClick={() => handleStatusToggle(p)} className={`hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full transition-colors ${p.status === "booked" ? "bg-red-100 text-red-600 hover:bg-red-200" : "bg-green-100 text-green-600 hover:bg-green-200"}`} title="Toggle availability">{p.status === "booked" ? "🔴 Booked" : "🟢 Available"}</button>
                         <button onClick={() => setPreviewProperty(p)} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Preview"><Eye size={16} /></button>
+                        <button onClick={() => setEditProperty(p)} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" title="Edit listing"><Pencil size={16} /></button>
                         <button onClick={() => setPromoteProperty(p)} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition-colors" title="Promote"><Megaphone size={16} /></button>
                         <button onClick={() => handleDelete(p.id)} className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" title="Delete"><Trash2 size={16} /></button>
                       </div>
@@ -705,6 +707,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
       </div>
 
       {showListForm && <ListPropertyForm onClose={() => setShowListForm(false)} onSuccess={fetchMyProperties} />}
+      {editProperty && <ListPropertyForm property={editProperty} onClose={() => setEditProperty(null)} onSuccess={fetchMyProperties} />}
       {previewProperty && <PreviewModal property={previewProperty} onClose={() => setPreviewProperty(null)} />}
       {promoteProperty && <PromoteModal property={promoteProperty} userId={user!.id} userEmail={user?.email ?? ""} userName={profile?.full_name ?? ""} onClose={() => { setPromoteProperty(null); fetchMyProperties(); }} />}
       {showPayoutModal && balance && <PayoutModal balance={balance} onClose={() => setShowPayoutModal(false)} onSuccess={fetchMyProperties} />}

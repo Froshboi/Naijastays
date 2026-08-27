@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import type { Property } from "@/lib/data";
 import { toast } from "sonner";
 
 const CLOUDINARY_CLOUD = "duwx0zo19";
@@ -14,6 +15,7 @@ const CLOUDINARY_PRESET = "naijastays_videos";
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
+  property?: Property;
 }
 
 const UNIT_TYPES = [
@@ -78,41 +80,42 @@ interface RoomType {
   cancellation_policy: string;
 }
 
-export default function ListPropertyForm({ onClose, onSuccess }: Props) {
+export default function ListPropertyForm({ onClose, onSuccess, property }: Props) {
+  const editing = Boolean(property);
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   
   // Media state
   const [images, setImages] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
+  const [previews, setPreviews] = useState<string[]>(property?.images || []);
   const [video, setVideo] = useState<File | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(property?.video_url || null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [videoUploading, setVideoUploading] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
 
   // Form state
   const [form, setForm] = useState({
-    title: "",
-    description: "",
-    writeup: "",
-    price: "",
-    price_label: "",
-    listing_type: "For Sale",
-    property_type: "Apartment",
-    unit_type: "",
-    beds: "0",
-    baths: "0",
-    size: "",
-    city: "",
-    state: "Rivers",
-    address: "",
-    agent_name: "",
-    agent_title: "",
-    agent_phone: "",
-    payment_method: "",
-    payment_details: "",
+    title: property?.title || "",
+    description: property?.description || "",
+    writeup: property?.writeup || "",
+    price: property?.price?.toString() || "",
+    price_label: property?.price_label || "",
+    listing_type: property?.listing_type || "For Sale",
+    property_type: property?.property_type || "Apartment",
+    unit_type: property?.unit_type || "",
+    beds: property?.beds?.toString() || "0",
+    baths: property?.baths?.toString() || "0",
+    size: property?.size || "",
+    city: property?.city || "",
+    state: property?.state || "Rivers",
+    address: property?.address || "",
+    agent_name: property?.agent_name || "",
+    agent_title: property?.agent_title || "",
+    agent_phone: property?.agent_phone || "",
+    payment_method: property?.payment_method || "",
+    payment_details: property?.payment_details || "",
   });
 
   const [amenities, setAmenities] = useState<string[]>([]);
@@ -280,13 +283,13 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
       if (!form.payment_details.trim()) return "Add payment or escrow instructions";
     }
     if (step === 2) {
-      if (images.length === 0) return "At least 1 property photo is required";
+      if (!editing && images.length === 0) return "At least 1 property photo is required";
     }
     if (step === 3) {
       if (!isHotel) {
         if (!form.price) return "Price is required";
       }
-      if (isHotel) {
+      if (isHotel && !editing) {
         if (roomTypes.length === 0) return "Hotels need at least one room type";
         for (let i = 0; i < roomTypes.length; i++) {
           const r = roomTypes[i];
@@ -318,6 +321,36 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
     
     setLoading(true);
     try {
+      if (editing && property) {
+        const { error: updateError } = await supabase.from("properties").update({
+          title: form.title,
+          description: form.description,
+          writeup: form.writeup,
+          price: parseInt(form.price) || 0,
+          price_label: form.price_label,
+          listing_type: form.listing_type,
+          property_type: form.property_type,
+          unit_type: form.unit_type || null,
+          beds: parseInt(form.beds) || 0,
+          baths: parseInt(form.baths) || 0,
+          size: form.size || null,
+          city: form.city,
+          state: form.state,
+          address: form.address,
+          agent_name: form.agent_name,
+          agent_title: form.agent_title,
+          agent_phone: form.agent_phone,
+          payment_method: form.payment_method,
+          payment_details: form.payment_details,
+          video_url: videoUrl,
+        }).eq("id", property.id);
+        if (updateError) throw updateError;
+        toast.success("Listing updated successfully");
+        onSuccess();
+        onClose();
+        return;
+      }
+
       // 1. Upload images
       const imageUrls: string[] = [];
       for (const file of images) {
@@ -336,7 +369,7 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
         ? Math.min(...roomTypes.map(r => r.price_per_night)) // Hotel "starts from" price
         : parseInt(form.price) || 0;
 
-      const { data: property, error: propError } = await supabase
+      const { data: createdProperty, error: propError } = await supabase
         .from("properties")
         .insert({
           user_id: user.id,
@@ -368,12 +401,12 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
         .single();
 
       if (propError) throw propError;
-      if (!property) throw new Error("Failed to create property");
+      if (!createdProperty) throw new Error("Failed to create property");
 
       // 3. If hotel, insert room types
       if (isHotel && roomTypes.length > 0) {
         const roomInserts = roomTypes.map(room => ({
-          property_id: property.id,
+          property_id: createdProperty.id,
           name: room.name,
           description: room.description,
           price_per_night: room.price_per_night,
@@ -394,13 +427,13 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
       }
 
       const { error: notificationError } = await supabase.rpc("notify_new_listing", {
-        p_property_id: property.id,
+        p_property_id: createdProperty.id,
       });
       if (notificationError) console.error("Listing alert delivery failed:", notificationError);
 
       toast.success(
         isHotel 
-          ? `🏨 ${property.title} listed with ${roomTypes.length} room types!` 
+          ? `🏨 ${createdProperty.title} listed with ${roomTypes.length} room types!` 
           : "Property listed successfully!"
       );
       onSuccess();
@@ -426,7 +459,7 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
         <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="font-display text-xl font-semibold">
-              {isHotel ? "List a Hotel" : "List a Property"}
+              {editing ? "Edit Listing" : isHotel ? "List a Hotel" : "List a Property"}
             </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
               Step {step} of 3 · {steps[step - 1].label}
@@ -641,7 +674,7 @@ export default function ListPropertyForm({ onClose, onSuccess }: Props) {
                   {images.length < 5 && (
                     <label className="w-20 h-20 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-all">
                       <Upload size={16} className="text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground mt-1">Add</span>
+                          <span className="text-[10px] text-muted-foreground mt-1">Add</span>
                       <input type="file" accept="image/*" multiple onChange={handleImages} className="hidden" />
                     </label>
                   )}
