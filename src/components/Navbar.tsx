@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Search, LayoutDashboard, ShieldCheck } from "lucide-react";
+import { Search, LayoutDashboard, ShieldCheck, UserRound, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AuthModal from "./AuthModal";
 import NotificationBell from "./NotificationBell"; // ← ADD THIS
+import ProfileSettings from "./ProfileSettings";
 
 interface NavbarProps {
   onSearch: (val: string) => void;
@@ -15,6 +16,7 @@ export default function Navbar({ onSearch, onDashboard, onAdmin }: NavbarProps) 
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [search, setSearch] = useState("");
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const openAuth = (mode: "login" | "register") => {
     setAuthMode(mode);
@@ -64,6 +66,9 @@ export default function Navbar({ onSearch, onDashboard, onAdmin }: NavbarProps) 
                 </button>
               )}
               <NotificationBell /> {/* ← MOVED INSIDE user block */}
+              <button onClick={() => setProfileOpen(true)} className="rounded-full p-2 text-foreground hover:bg-secondary" title="Edit profile">
+                <UserRound size={18} />
+              </button>
               <span className="text-sm text-muted-foreground hidden sm:inline">
                 Hi, {profile?.full_name?.split(" ")[0] || "User"}
               </span>
@@ -85,6 +90,14 @@ export default function Navbar({ onSearch, onDashboard, onAdmin }: NavbarProps) 
       </nav>
 
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode={authMode} />
+      {profileOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={(event) => event.target === event.currentTarget && setProfileOpen(false)}>
+          <div className="relative w-full max-w-xl rounded-2xl bg-white p-4 shadow-2xl sm:p-6">
+            <button onClick={() => setProfileOpen(false)} className="absolute right-4 top-4 rounded-full p-1 text-muted-foreground hover:bg-secondary" title="Close profile editor"><X size={18} /></button>
+            <ProfileSettings />
+          </div>
+        </div>
+      )}
     </>
   );
 }

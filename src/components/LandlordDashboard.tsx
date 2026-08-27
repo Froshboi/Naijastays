@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import ListPropertyForm from "./ListPropertyForm";
+import ProfileSettings from "./ProfileSettings";
 import { notifyUser, sendEmail } from "@/lib/notifications";
 
 const EDGE_FN = "https://lvntcsobqtgtbnudiwmv.supabase.co/functions/v1/korapay-webhook";
@@ -520,6 +521,10 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
           <div><p className="text-white font-bold text-sm">🚀 Boost your listings</p><p className="text-white/85 text-xs mt-0.5">Pay with Naira, USDT, SOL or BTC. Get to the top of search results instantly.</p></div>
           <button onClick={() => properties.length > 0 && setPromoteProperty(properties[0])} className="shrink-0 bg-white text-primary font-bold text-sm px-4 py-2 rounded-full hover:bg-secondary transition-colors">Promote a listing →</button>
         </div>
+      </div>
+
+      <div className="px-4 md:px-8">
+        <ProfileSettings />
       </div>
 
       {/* Properties List */}

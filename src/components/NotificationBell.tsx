@@ -23,6 +23,7 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const bellRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
@@ -140,6 +141,11 @@ export default function NotificationBell() {
     }
   };
 
+  const expandNotification = async (notification: Notification) => {
+    setExpandedId((current) => current === notification.id ? null : notification.id);
+    if (!notification.read) await markRead(notification.id);
+  };
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const handleBellClick = async () => {
@@ -204,21 +210,24 @@ export default function NotificationBell() {
               notifications.map((n) => (
                 <div key={n.id} className={`px-4 py-3 border-b border-border last:border-0 transition-colors ${n.read ? 'bg-white' : 'bg-secondary/30'}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
+                    <button onClick={() => expandNotification(n)} className="flex-1 min-w-0 text-left">
                       <div className="text-sm font-semibold text-foreground">{n.title}</div>
-                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-3 break-words">{n.body}</div>
+                      <div className={`mt-0.5 text-xs text-muted-foreground break-words ${expandedId === n.id ? "whitespace-pre-wrap" : "line-clamp-3"}`}>{n.body}</div>
+                      <div className="mt-1 text-[10px] font-semibold text-primary">{expandedId === n.id ? "Click to collapse" : "Click to read full message"}</div>
                       <div className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleDateString()} • {n.type}</div>
+                    </button>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
                       {getActionButton(n)}
-                    </div>
-                    <div className="flex shrink-0 items-start gap-1">
-                      {!n.read && (
-                        <button onClick={() => markRead(n.id)} className="p-1 rounded-full hover:bg-secondary text-muted-foreground" title="Mark read">
-                          <X size={14} />
+                      <div className="flex items-start gap-1">
+                        {!n.read && (
+                          <button onClick={() => markRead(n.id)} className="p-1 rounded-full hover:bg-secondary text-muted-foreground" title="Mark read">
+                            <X size={14} />
+                          </button>
+                        )}
+                        <button onClick={() => deleteNotification(n.id)} className="p-1 rounded-full hover:bg-red-50 text-muted-foreground hover:text-red-600" title="Delete notification">
+                          <Trash2 size={14} />
                         </button>
-                      )}
-                      <button onClick={() => deleteNotification(n.id)} className="p-1 rounded-full hover:bg-red-50 text-muted-foreground hover:text-red-600" title="Delete notification">
-                        <Trash2 size={14} />
-                      </button>
+                      </div>
                     </div>
                   </div>
                 </div>
