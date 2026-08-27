@@ -59,6 +59,8 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
   const [authOpen, setAuthOpen] = useState(false);
   const [actionMode, setActionMode] = useState<"offer" | "booking" | "protection" | "escrow" | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [landlordProfile, setLandlordProfile] = useState<{ full_name: string | null; phone: string | null; avatar_url: string | null } | null>(null);
+  const [landlordStats, setLandlordStats] = useState({ listings: 0, reviews: 0, rating: 0 });
   const [imgIdx, setImgIdx] = useState(0);
   const imageSources = Array.isArray(p.images) ? p.images.filter((src): src is string => Boolean(src && src.trim())) : [];
   const imgs = imageSources.length > 0 ? imageSources : ["/placeholder.svg"];
@@ -88,8 +90,27 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
       property_id: p.id,
       viewer_id: user?.id ?? null,
       event_type: "detail_view",
+    }).then(({ error }) => {
+      if (error) console.error("Detail view tracking failed:", error);
     });
   }, [isLiveListing, p.id, user?.id]);
+
+  useEffect(() => {
+    if (!isLiveListing) return;
+    void Promise.all([
+      supabase.from("profiles").select("full_name, phone, avatar_url").eq("user_id", p.user_id).maybeSingle(),
+      supabase.from("properties").select("id").eq("user_id", p.user_id),
+      supabase.from("landlord_reviews").select("rating").eq("landlord_id", p.user_id).eq("status", "published"),
+    ]).then(([profileResult, listingsResult, reviewsResult]) => {
+      setLandlordProfile(profileResult.data);
+      const reviews = reviewsResult.data || [];
+      setLandlordStats({
+        listings: listingsResult.data?.length || 0,
+        reviews: reviews.length,
+        rating: reviews.length ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length : 0,
+      });
+    });
+  }, [isLiveListing, p.user_id]);
 
   useEffect(() => { setImgIdx(0); }, [p.id]);
 
@@ -285,6 +306,30 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
             <h3 className="text-lg font-semibold text-foreground mb-3">Location</h3>
             <PropertyMap address={p.address} city={p.city} state={p.state} />
           </div>
+
+          {isLiveListing && (
+            <div className="mt-6 rounded-2xl border border-primary/15 bg-white p-5 shadow-[0_18px_42px_-34px_rgba(21,128,61,0.55)]">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-lg font-bold text-primary">
+                    {landlordProfile?.avatar_url ? <img src={landlordProfile.avatar_url} alt={landlordProfile.full_name || "Landlord"} className="h-full w-full object-cover" /> : (landlordProfile?.full_name || agentName).charAt(0).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-foreground">{landlordProfile?.full_name || agentName}</div>
+                    <div className="truncate text-xs text-muted-foreground">{agentTitle}{landlordProfile?.phone ? ` · ${landlordProfile.phone}` : ""}</div>
+                  </div>
+                </div>
+                <button onClick={() => setProfileOpen(true)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+                  <Star size={15} className="fill-amber-300 text-amber-300" /> View profile & review
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-border pt-4 text-center">
+                <div><div className="text-lg font-semibold text-foreground">{landlordStats.listings}</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Listings</div></div>
+                <div><div className="text-lg font-semibold text-foreground">{landlordStats.rating ? landlordStats.rating.toFixed(1) : "New"}</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Rating</div></div>
+                <div><div className="text-lg font-semibold text-foreground">{landlordStats.reviews}</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Reviews</div></div>
+              </div>
+            </div>
+          )}
 
           <hr className="border-border my-6" />
 

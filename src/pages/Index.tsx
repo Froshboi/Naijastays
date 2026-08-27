@@ -118,6 +118,8 @@ export default function Index() {
         property_id: property.id,
         viewer_id: user?.id ?? null,
         event_type: "listing_click",
+      }).then(({ error }) => {
+        if (error) console.error("Listing click tracking failed:", error);
       });
     }
     setSelectedProperty(property);
