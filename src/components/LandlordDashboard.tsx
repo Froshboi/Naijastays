@@ -7,7 +7,7 @@ import {
   Trash2, Plus, Eye, ArrowLeft, Megaphone, X,
   Star, Zap, TrendingUp, CheckCircle, Wallet, Banknote,
   Bitcoin, ArrowDownToLine, History, Loader2, Bell,
-  Copy, Upload, Pencil
+  Copy, Upload, Pencil, MessageSquare
 } from "lucide-react";
 import { toast } from "sonner";
 import ListPropertyForm from "./ListPropertyForm";
@@ -28,6 +28,20 @@ type ProtectionCaseRecord = Tables<"protection_cases">;
 type EngagementEventRecord = Tables<"property_engagement_events">;
 type EscrowPaymentRecord = Tables<"escrow_payments">;
 type LandlordReviewRecord = Tables<"landlord_reviews">;
+
+interface ListingMessageRecord {
+  id: string;
+  property_id: string | null;
+  sender_id: string;
+  landlord_id: string | null;
+  kind: "landlord_chat" | "admin_contact" | "listing_report";
+  subject: string;
+  body: string;
+  phone: string | null;
+  status: "open" | "reviewing" | "resolved" | "dismissed";
+  admin_note: string | null;
+  created_at: string;
+}
 
 interface BalanceData {
   user_id: string;
@@ -271,11 +285,12 @@ const getListingStatusPills = ({ property, offers, bookings, escrowPayments }: a
   return pills;
 };
 
-const getPropertyTimelineItems = ({ offers, bookings, escrowPayments, protectionCases }: any) => {
+const getPropertyTimelineItems = ({ offers, bookings, escrowPayments, protectionCases, listingMessages = [] }: any) => {
   const timeline = [
     ...offers.map((o: any) => ({ id: `offer-${o.id}`, createdAt: o.created_at, label: o.status === "accepted" ? "Offer accepted" : o.status === "rejected" ? "Offer declined" : "Offer pending", meta: `${formatFullPrice(o.offer_amount)}${o.phone ? ` • ${o.phone}` : ""}`, tone: o.status === "accepted" ? "bg-emerald-500" : o.status === "rejected" ? "bg-red-500" : "bg-orange-400" })),
     ...bookings.map((b: any) => ({ id: `booking-${b.id}`, createdAt: b.created_at, label: b.status === "confirmed" ? "Booking confirmed" : b.status === "declined" ? "Booking declined" : "Reservation request", meta: `${formatFullPrice(b.total_quote)} • ${b.booking_type}`, tone: b.status === "confirmed" ? "bg-blue-500" : b.status === "declined" ? "bg-red-500" : "bg-amber-400" })),
     ...escrowPayments.map((p: any) => ({ id: `escrow-${p.id}`, createdAt: p.created_at, label: p.status === "released" ? "Escrow released" : p.status === "refunded" ? "Escrow refunded" : p.status === "failed" || p.status === "cancelled" ? "Escrow failed" : "Escrow held", meta: `${formatFullPrice(p.amount_naira)}${p.payment_method ? ` • ${p.payment_method}` : ""}`, tone: p.status === "released" ? "bg-emerald-500" : p.status === "refunded" || p.status === "failed" || p.status === "cancelled" ? "bg-red-500" : "bg-violet-500" })),
+    ...listingMessages.map((m: any) => ({ id: `message-${m.id}`, createdAt: m.created_at, label: m.kind === "listing_report" ? "Listing reported" : m.kind === "admin_contact" ? "Admin contact request" : "New chat message", meta: `${m.subject} • ${m.status}`, tone: m.kind === "listing_report" ? "bg-red-500" : "bg-emerald-500" })),
     ...protectionCases.map((c: any) => ({ id: `case-${c.id}`, createdAt: c.created_at, label: c.status === "resolved" ? "Protection case resolved" : c.status === "dismissed" ? "Protection case dismissed" : "Protection case opened", meta: `${c.category} • ${c.priority} priority`, tone: c.status === "resolved" ? "bg-emerald-500" : c.status === "dismissed" ? "bg-slate-400" : "bg-rose-500" })),
   ];
   return timeline.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 4);
@@ -287,6 +302,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
   const [offers, setOffers] = useState<OfferRecord[]>([]);
   const [bookingRequests, setBookingRequests] = useState<BookingRequestRecord[]>([]);
   const [protectionCases, setProtectionCases] = useState<ProtectionCaseRecord[]>([]);
+  const [listingMessages, setListingMessages] = useState<ListingMessageRecord[]>([]);
   const [engagementEvents, setEngagementEvents] = useState<EngagementEventRecord[]>([]);
   const [escrowPayments, setEscrowPayments] = useState<EscrowPaymentRecord[]>([]);
   const [landlordReviews, setLandlordReviews] = useState<LandlordReviewRecord[]>([]);
@@ -312,13 +328,13 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
     setProperties(propertyRows);
     const propertyIds = propertyRows.map((p) => p.id);
     if (propertyIds.length === 0) {
-      setOffers([]); setBookingRequests([]); setProtectionCases([]); setEngagementEvents([]); setEscrowPayments([]); setLandlordReviews([]); setBalance(null); setBalanceTxs([]); setPayoutHistory([]);
+      setOffers([]); setBookingRequests([]); setProtectionCases([]); setListingMessages([]); setEngagementEvents([]); setEscrowPayments([]); setLandlordReviews([]); setBalance(null); setBalanceTxs([]); setPayoutHistory([]);
       setLoading(false); return;
     }
 
     const [
       { data: offerData }, { data: bookingData }, { data: protectionData }, { data: engagementData },
-      { data: escrowData }, { data: reviewData }, { data: balData }, { data: txData }, { data: payoutData }
+      { data: escrowData }, { data: reviewData }, { data: messageData }, { data: balData }, { data: txData }, { data: payoutData }
     ] = await Promise.all([
       supabase.from("property_offers").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
       supabase.from("booking_requests").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
@@ -326,6 +342,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
       supabase.from("property_engagement_events").select("*").in("property_id", propertyIds),
       supabase.from("escrow_payments").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
       supabase.from("landlord_reviews").select("*").eq("landlord_id", user.id).eq("status", "published").order("created_at", { ascending: false }),
+      (supabase as any).from("listing_messages").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
       supabase.from("landlord_balances").select("*").eq("user_id", user.id).maybeSingle(),
       supabase.from("landlord_balance_transactions").select("*, properties(title)").eq("landlord_id", user.id).order("created_at", { ascending: false }),
       supabase.from("payout_requests").select("*").eq("landlord_id", user.id).order("created_at", { ascending: false }),
@@ -337,6 +354,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
     setEngagementEvents((engagementData as EngagementEventRecord[]) || []);
     setEscrowPayments((escrowData as EscrowPaymentRecord[]) || []);
     setLandlordReviews((reviewData as LandlordReviewRecord[]) || []);
+    setListingMessages((messageData as ListingMessageRecord[]) || []);
     setBalance(balData || { user_id: user.id, available_balance: 0, pending_balance: 0, total_earned: 0, total_withdrawn: 0 });
     setBalanceTxs((txData as BalanceTransaction[]) || []);
     setPayoutHistory((payoutData as PayoutRequest[]) || []);
@@ -475,6 +493,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
             { label: "Total Clicks", value: totalClicks },
             { label: "Pending Offers", value: offers.filter((o) => o.status === "pending").length },
             { label: "Booking Requests", value: bookingRequests.filter((b) => b.status === "pending").length },
+            { label: "Messages", value: listingMessages.filter((m) => m.status === "open" || m.status === "reviewing").length },
             { label: "Open Cases", value: protectionCases.filter((c) => c.status === "open" || c.status === "investigating").length },
             { label: "Escrow Deals", value: pendingEscrowCount },
             { label: "Promoted", value: properties.filter((p) => p.promoted).length },
@@ -540,8 +559,9 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
                 const pBookings = bookingRequests.filter((b) => b.property_id === p.id);
                 const pEscrows = escrowPayments.filter((e) => e.property_id === p.id);
                 const pCases = protectionCases.filter((c) => c.property_id === p.id);
+                const pMessages = listingMessages.filter((message) => message.property_id === p.id);
                 const pills = getListingStatusPills({ property: p, offers: pOffers, bookings: pBookings, escrowPayments: pEscrows });
-                const timeline = getPropertyTimelineItems({ offers: pOffers, bookings: pBookings, escrowPayments: pEscrows, protectionCases: pCases });
+                const timeline = getPropertyTimelineItems({ offers: pOffers, bookings: pBookings, escrowPayments: pEscrows, protectionCases: pCases, listingMessages: pMessages });
                 return (
                   <div key={p.id} className="px-5 py-5 hover:bg-naija-surface/50 transition-colors">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start">
@@ -564,7 +584,7 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
                           </div>
                         </div>
                         <div className="mt-4 rounded-2xl border border-border bg-secondary/35 p-4">
-                          <div className="flex items-center justify-between gap-3"><div className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Listing timeline</div><div className="text-[11px] text-muted-foreground">{pOffers.length} offers • {pBookings.length} bookings • {pEscrows.length} escrow</div></div>
+                          <div className="flex items-center justify-between gap-3"><div className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">Listing timeline</div><div className="text-[11px] text-muted-foreground">{pOffers.length} offers • {pBookings.length} bookings • {pMessages.length} messages • {pEscrows.length} escrow</div></div>
                           {timeline.length === 0 ? <div className="mt-3 text-sm text-muted-foreground">No activity on this listing yet.</div> : (
                             <div className="mt-3 space-y-3">{timeline.map((item: any) => (
                               <div key={item.id} className="flex items-start gap-3"><div className={`mt-1 h-2.5 w-2.5 rounded-full shrink-0 ${item.tone}`} /><div className="min-w-0"><div className="text-sm font-semibold text-foreground">{item.label}</div><div className="text-xs text-muted-foreground">{item.meta} • {formatShortDate(item.createdAt)}</div></div></div>
@@ -589,8 +609,8 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* Offers / Bookings / Cases / Escrow */}
-      <div className="px-4 md:px-8 pb-12 grid gap-6 xl:grid-cols-4">
+      {/* Offers / Bookings / Messages / Cases / Escrow */}
+      <div className="px-4 md:px-8 pb-12 grid gap-6 xl:grid-cols-5">
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between"><h2 className="font-semibold text-foreground">Buyer Offers</h2><span className="text-xs text-muted-foreground">{offers.length} total</span></div>
           <div className="divide-y divide-border">
@@ -628,6 +648,24 @@ export default function LandlordDashboard({ onBack }: { onBack: () => void }) {
                     <button onClick={() => handleBookingDecision(booking.id, "declined")} disabled={actionLoadingKey === `booking-${booking.id}-declined`} className="flex-1 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-60">{actionLoadingKey === `booking-${booking.id}-declined` ? <Loader2 size={14} className="animate-spin inline mr-1" /> : null} Decline</button>
                   </div>
                 )}
+              </div>
+            ); })}
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between"><h2 className="font-semibold text-foreground">Listing Messages</h2><span className="text-xs text-muted-foreground">{listingMessages.length} total</span></div>
+          <div className="divide-y divide-border">
+            {listingMessages.length === 0 ? <div className="p-6 text-sm text-muted-foreground">No listing messages yet.</div> : listingMessages.slice(0, 6).map((message) => { const property = message.property_id ? propertyLookup.get(message.property_id) : null; return (
+              <div key={message.id} className="p-5 space-y-3">
+                <div className="flex items-start justify-between gap-3"><div><div className="text-sm font-semibold text-foreground">{property?.title || "Listing message"}</div><div className="text-xs text-muted-foreground">{formatShortDate(message.created_at)}</div></div><span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${message.status === "resolved" ? "bg-green-100 text-green-700" : message.status === "dismissed" ? "bg-slate-100 text-slate-700" : "bg-amber-100 text-amber-700"}`}>{message.status}</span></div>
+                <div className="text-sm font-semibold text-foreground">{message.subject}</div>
+                <p className="line-clamp-3 text-sm text-muted-foreground">{message.body}</p>
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span>{message.kind.replace("_", " ")}</span>
+                  {message.phone && <button onClick={() => copyBookingValue("Message phone", message.phone!)} className="font-semibold text-primary hover:underline">{message.phone}</button>}
+                </div>
+                {message.admin_note && <p className="rounded-xl bg-primary/5 p-3 text-xs text-primary">Admin note: {message.admin_note}</p>}
               </div>
             ); })}
           </div>

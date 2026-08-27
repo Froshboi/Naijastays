@@ -38,6 +38,11 @@ export default function NotificationBell() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 8000);
     
@@ -61,7 +66,7 @@ export default function NotificationBell() {
       clearInterval(interval);
       channel.unsubscribe();
     };
-  }, [user]);
+  }, [user?.id]);
 
   // Close on outside click
   useEffect(() => {
@@ -130,6 +135,16 @@ export default function NotificationBell() {
           setOpen(false);
           break;
         }
+        case "view_admin_message": {
+          navigate("/admin?tab=messages");
+          setOpen(false);
+          break;
+        }
+        case "view_listing_message": {
+          navigate("/?dashboard=landlord");
+          setOpen(false);
+          break;
+        }
         default:
           break;
       }
@@ -156,8 +171,6 @@ export default function NotificationBell() {
   };
 
   const getActionButton = (n: Notification) => {
-    if (n.read) return null;
-    
     switch (n.action_type) {
       case "mark_unavailable":
         return (
@@ -174,9 +187,16 @@ export default function NotificationBell() {
       case "view_offer":
       case "review_booking":
       case "confirm_booking":
+      case "view_listing_message":
         return (
           <button onClick={() => handleAction(n)} className="mt-2 flex items-center gap-1.5 rounded-lg border border-primary/20 bg-secondary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-secondary/80">
             <Eye size={12} /> Review in dashboard
+          </button>
+        );
+      case "view_admin_message":
+        return (
+          <button onClick={() => handleAction(n)} className="mt-2 flex items-center gap-1.5 rounded-lg border border-primary/20 bg-secondary px-3 py-1.5 text-xs font-semibold text-primary hover:bg-secondary/80">
+            <Eye size={12} /> Open admin messages
           </button>
         );
       default:

@@ -1,4 +1,4 @@
-import { ArrowLeft, CalendarDays, Heart, MessageCircle, Phone, Share2, ShieldCheck, Star } from "lucide-react";
+import { ArrowLeft, CalendarDays, Flag, Headphones, Heart, MessageCircle, MessageSquare, Phone, Share2, ShieldCheck, Star } from "lucide-react";
 import { Property, formatFullPrice } from "@/lib/data";
 import { getListingPrice, getRentalPricingSummary, formatNaira } from "@/lib/pricing";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import AuthModal from "./AuthModal";
 import PropertyActionModal from "./PropertyActionModal";
 import LandlordProfileModal from "./LandlordProfileModal";
+import ListingMessageModal, { ListingMessageMode } from "./ListingMessageModal";
 import PropertyMap from "./PropertyMap";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -58,6 +59,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
   const { user } = useAuth();
   const [authOpen, setAuthOpen] = useState(false);
   const [actionMode, setActionMode] = useState<"offer" | "booking" | "protection" | "escrow" | null>(null);
+  const [messageMode, setMessageMode] = useState<ListingMessageMode | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [landlordProfile, setLandlordProfile] = useState<{ full_name: string | null; phone: string | null; avatar_url: string | null } | null>(null);
   const [landlordStats, setLandlordStats] = useState({ listings: 0, reviews: 0, rating: 0 });
@@ -142,6 +144,12 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
     setActionMode(mode);
   };
 
+  const openMessage = (mode: ListingMessageMode) => {
+    if (!user) { setAuthOpen(true); return; }
+    if (!isLiveListing) { toast.info("This demo listing is not yet live for messages."); return; }
+    setMessageMode(mode);
+  };
+
   const handleBook = () => {
     if (!user) { setAuthOpen(true); return; }
     if (isNightly || isRent || isHotel) { openAction("booking"); return; }
@@ -160,7 +168,7 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
   };
 
   return (
-    <div className="min-h-screen pb-24 bg-[linear-gradient(180deg,rgba(248,252,248,0.95),rgba(255,255,255,1))]">
+    <div className="min-h-screen pb-44 lg:pb-24 bg-[linear-gradient(180deg,rgba(248,252,248,0.95),rgba(255,255,255,1))]">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 md:px-8 pt-5 pb-2">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           <ArrowLeft size={16} /> Back to listings
@@ -397,6 +405,10 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
               {user ? (isSale ? "Make an Offer" : "Reserve Now") : "Login to proceed"}
             </button>
 
+            <button onClick={() => openMessage("landlord_chat")} className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-primary/20 bg-white px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/5">
+              <MessageSquare size={15} /> Chat on NaijaStay
+            </button>
+
             <button onClick={() => openAction("escrow")} className="mb-3 w-full rounded-lg border border-primary/20 bg-secondary px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-secondary/80">
               Pay through NaijaStays escrow
             </button>
@@ -422,6 +434,15 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
                   <MessageCircle size={15} /> WhatsApp
                 </button>
               )}
+            </div>
+
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <button onClick={() => openMessage("admin_contact")} className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-3 py-2.5 text-sm font-semibold text-foreground transition hover:bg-naija-surface">
+                <Headphones size={15} /> Admin
+              </button>
+              <button onClick={() => openMessage("listing_report")} className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-100">
+                <Flag size={15} /> Report
+              </button>
             </div>
 
             {p.agent_phone && (
@@ -480,25 +501,41 @@ export default function PropertyDetail({ property: p, isFavorite, onFavorite, on
       </div>
 
       {/* Mobile sticky bottom bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 py-3 flex items-center gap-2.5 z-30">
-        <div className="flex-1">
-          <div className="font-display font-bold text-foreground text-lg leading-tight">{listingPrice.formatted}</div>
-          {listingPrice.label && <div className="text-xs text-muted-foreground">{listingPrice.label}</div>}
-        </div>
-        {p.agent_phone && (
-          <button onClick={handleCall} className="flex items-center gap-1.5 px-4 py-2.5 border border-border rounded-full text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">
-            <Phone size={14} /> Call
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] z-30">
+        <div className="flex items-center gap-2.5">
+          <div className="min-w-0 flex-1">
+            <div className="font-display font-bold text-foreground text-lg leading-tight truncate">{listingPrice.formatted}</div>
+            {listingPrice.label && <div className="text-xs text-muted-foreground">{listingPrice.label}</div>}
+          </div>
+          {p.agent_phone && (
+            <button onClick={handleCall} className="flex shrink-0 items-center gap-1.5 px-3 py-2.5 border border-border rounded-full text-sm font-semibold text-foreground hover:bg-naija-surface transition-colors">
+              <Phone size={14} /> Call
+            </button>
+          )}
+          <button onClick={isSale ? () => openAction("offer") : handleBook}
+            className="min-w-[104px] flex-1 py-2.5 bg-primary text-primary-foreground rounded-full font-bold text-sm hover:opacity-90 transition-opacity">
+            {user ? (isSale ? "Make Offer" : "Reserve") : "Login"}
           </button>
-        )}
-        <button onClick={isSale ? () => openAction("offer") : handleBook}
-          className="flex-1 py-2.5 bg-primary text-primary-foreground rounded-full font-bold text-sm hover:opacity-90 transition-opacity">
-          {user ? (isSale ? "Make Offer" : "Reserve") : "Login to proceed"}
-        </button>
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          <button onClick={() => openMessage("landlord_chat")} className="inline-flex items-center justify-center gap-1 rounded-full border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-bold text-primary">
+            <MessageSquare size={13} /> Chat
+          </button>
+          <button onClick={() => openMessage("admin_contact")} className="inline-flex items-center justify-center gap-1 rounded-full border border-border px-3 py-2 text-xs font-bold text-foreground">
+            <Headphones size={13} /> Admin
+          </button>
+          <button onClick={() => openMessage("listing_report")} className="inline-flex items-center justify-center gap-1 rounded-full border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700">
+            <Flag size={13} /> Report
+          </button>
+        </div>
       </div>
 
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} initialMode="login" />
       {actionMode && (
         <PropertyActionModal mode={actionMode} property={p} onClose={() => setActionMode(null)} />
+      )}
+      {messageMode && (
+        <ListingMessageModal property={p} mode={messageMode} onClose={() => setMessageMode(null)} />
       )}
       {profileOpen && isLiveListing && (
         <LandlordProfileModal

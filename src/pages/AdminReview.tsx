@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, BadgeCheck, Ban, Building2, CheckCircle2, Clock3,
   Eye, Home, Loader2, RefreshCw, ShieldCheck, Sparkles, Tag,
   Trash2, UserCheck, XCircle, Wallet, Banknote, ArrowDownToLine,
-  History, Bell, Copy,
+  History, Bell, Copy, MessageSquare,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -63,7 +63,22 @@ interface PayoutRequest {
   profiles?: { full_name: string | null; phone: string | null } | null;
 }
 
-type TabId = "overview" | "payments" | "escrow" | "applications" | "listings" | "offers" | "bookings" | "protection" | "balances" | "payouts";
+interface ListingMessageRecord {
+  id: string;
+  property_id: string | null;
+  sender_id: string;
+  landlord_id: string | null;
+  kind: "landlord_chat" | "admin_contact" | "listing_report";
+  subject: string;
+  body: string;
+  phone: string | null;
+  status: "open" | "reviewing" | "resolved" | "dismissed";
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+type TabId = "overview" | "payments" | "escrow" | "applications" | "listings" | "offers" | "bookings" | "messages" | "protection" | "balances" | "payouts";
 type ListingFilter = "all" | "promoted" | "unverified" | "occupied";
 
 const ADMIN_TABS: Array<{ id: TabId; label: string }> = [
@@ -74,6 +89,7 @@ const ADMIN_TABS: Array<{ id: TabId; label: string }> = [
   { id: "listings", label: "Listings" },
   { id: "offers", label: "Offers" },
   { id: "bookings", label: "Bookings" },
+  { id: "messages", label: "Messages" },
   { id: "protection", label: "Protection" },
   { id: "balances", label: "Balances" },
   { id: "payouts", label: "Payouts" },
@@ -133,6 +149,7 @@ const sendEmail = async (to: string, subject: string, html: string) => {
 
 export default function AdminReview() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { roles, loading: authLoading } = useAuth();
   const isAdmin = roles?.includes("admin") ?? false;
 
@@ -151,6 +168,7 @@ export default function AdminReview() {
   const [properties, setProperties] = useState<PropertyRecord[]>([]);
   const [offers, setOffers] = useState<OfferRecord[]>([]);
   const [bookingRequests, setBookingRequests] = useState<BookingRequestRecord[]>([]);
+  const [listingMessages, setListingMessages] = useState<ListingMessageRecord[]>([]);
   const [protectionCases, setProtectionCases] = useState<ProtectionCaseRecord[]>([]);
   const [escrowPayments, setEscrowPayments] = useState<EscrowPaymentRecord[]>([]);
   const [balanceTransactions, setBalanceTransactions] = useState<BalanceTransaction[]>([]);
@@ -170,6 +188,7 @@ export default function AdminReview() {
         { data: propertiesData, error: propertiesError },
         { data: offerData, error: offerError },
         { data: bookingData, error: bookingError },
+        { data: listingMessageData, error: listingMessageError },
         { data: protectionData, error: protectionError },
         { data: escrowData, error: escrowError },
         { data: balanceTxData, error: balanceTxError },
@@ -180,6 +199,7 @@ export default function AdminReview() {
         supabase.from("properties").select("*").order("created_at", { ascending: false }),
         supabase.from("property_offers").select("*").order("created_at", { ascending: false }),
         supabase.from("booking_requests").select("*").order("created_at", { ascending: false }),
+        (supabase as any).from("listing_messages").select("*").order("created_at", { ascending: false }),
         supabase.from("protection_cases").select("*").order("created_at", { ascending: false }),
         supabase.from("escrow_payments").select("*").order("created_at", { ascending: false }),
         supabase.from("landlord_balance_transactions").select("*, properties(title), profiles(full_name)").eq("status", "pending").order("created_at", { ascending: false }),
@@ -191,6 +211,7 @@ export default function AdminReview() {
       if (propertiesError) throw propertiesError;
       if (offerError) throw offerError;
       if (bookingError) throw bookingError;
+      if (listingMessageError) console.error("Listing messages error:", listingMessageError);
       if (protectionError) throw protectionError;
       if (escrowError) throw escrowError;
       if (balanceTxError) console.error("Balance tx error:", balanceTxError);
@@ -209,6 +230,7 @@ export default function AdminReview() {
       setProperties((propertiesData as PropertyRecord[]) ?? []);
       setOffers((offerData as OfferRecord[]) ?? []);
       setBookingRequests((bookingData as BookingRequestRecord[]) ?? []);
+      setListingMessages((listingMessageData as ListingMessageRecord[]) ?? []);
       setProtectionCases((protectionData as ProtectionCaseRecord[]) ?? []);
       setEscrowPayments((escrowData as EscrowPaymentRecord[]) ?? []);
       setBalanceTransactions((balanceTxData as BalanceTransaction[]) ?? []);
@@ -247,6 +269,13 @@ export default function AdminReview() {
       fetchAdminData();
     }
   }, [authLoading, isAdmin]);
+
+  useEffect(() => {
+    const tab = new URLSearchParams(location.search).get("tab") as TabId | null;
+    if (tab && ADMIN_TABS.some((entry) => entry.id === tab)) {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
 
   const sendBroadcast = async () => {
     if (!broadcastTitle.trim() || !broadcastBody.trim()) {
@@ -460,6 +489,28 @@ const approvePayment = async (payment: PendingPayment) => {
     }
   };
 
+  const updateListingMessageStatus = async (
+    message: ListingMessageRecord,
+    status: ListingMessageRecord["status"],
+  ) => {
+    const adminNote = window.prompt("Optional note to send with this update:", message.admin_note || "") ?? "";
+    try {
+      setActionKey(`message-${message.id}-${status}`);
+      const { error } = await (supabase as any)
+        .from("listing_messages")
+        .update({ status, admin_note: adminNote.trim() || null })
+        .eq("id", message.id);
+      if (error) throw error;
+      toast.success(`Message marked ${status}`);
+      await fetchAdminData();
+    } catch (error) {
+      console.error(error);
+      toast.error("Message update failed");
+    } finally {
+      setActionKey(null);
+    }
+  };
+
   // NEW: Approve booking credit (moves pending → available balance)
   const approveBalanceTransaction = async (tx: BalanceTransaction) => {
     try {
@@ -575,6 +626,7 @@ const approvePayment = async (payment: PendingPayment) => {
   const occupiedCount = properties.filter((p) => p.status === "occupied").length;
   const pendingOfferCount = offers.filter((o) => o.status === "pending").length;
   const pendingBookingCount = bookingRequests.filter((b) => b.status === "pending").length;
+  const openMessageCount = listingMessages.filter((message) => message.status === "open" || message.status === "reviewing").length;
   const pendingEscrowCount = escrowPayments.filter((p) => p.status === "pending" || p.status === "confirmed").length;
   const openProtectionCount = protectionCases.filter((c) => c.status === "open" || c.status === "investigating").length;
   const pendingBalanceCount = balanceTransactions.filter((t) => t.status === "pending").length;
@@ -648,6 +700,7 @@ const approvePayment = async (payment: PendingPayment) => {
               { label: "Pending applications", value: pendingApplications.length, note: `${applicationCounts.approved} approved so far`, icon: UserCheck },
               { label: "Pending offers", value: pendingOfferCount, note: "Buyer negotiation queue", icon: Tag },
               { label: "Booking requests", value: pendingBookingCount, note: "Awaiting landlord response", icon: Clock3 },
+              { label: "Messages", value: openMessageCount, note: "Chats and reports to review", icon: MessageSquare },
               { label: "Open protection", value: openProtectionCount, note: "Trust and dispute cases", icon: ShieldCheck },
               { label: "Pending credits", value: pendingBalanceCount, note: "Booking earnings to approve", icon: Wallet },
               { label: "Pending payouts", value: pendingPayoutCount, note: "Landlord withdrawal requests", icon: ArrowDownToLine },
@@ -1173,7 +1226,78 @@ const approvePayment = async (payment: PendingPayment) => {
             })}
           </div>
         )}
-                {/* PROTECTION TAB */}
+
+        {/* MESSAGES TAB */}
+        {activeTab === "messages" && (
+          <div className="mt-6 space-y-4">
+            {listingMessages.length === 0 && (
+              <div className="rounded-[28px] border border-dashed border-border bg-white p-10 text-center text-muted-foreground">No listing messages or reports yet.</div>
+            )}
+            {listingMessages.map((message) => {
+              const property = message.property_id ? propertyLookup.get(message.property_id) : null;
+              const sender = userLookup.get(message.sender_id);
+              const landlord = message.landlord_id ? userLookup.get(message.landlord_id) : null;
+              const tone = message.kind === "listing_report"
+                ? "bg-red-50 text-red-700"
+                : message.kind === "admin_contact"
+                  ? "bg-blue-50 text-blue-700"
+                  : "bg-emerald-50 text-emerald-700";
+              return (
+                <div key={message.id} className="rounded-[28px] border border-border bg-white p-6 shadow-[0_20px_55px_-40px_rgba(15,23,42,0.35)]">
+                  <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] ${tone}`}>{message.kind.replace("_", " ")}</span>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${message.status === "resolved" ? "bg-emerald-50 text-emerald-700" : message.status === "dismissed" ? "bg-slate-100 text-slate-700" : "bg-amber-50 text-amber-700"}`}>{message.status}</span>
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-foreground">{message.subject}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {property?.title || "Unknown listing"} • {sender?.full_name || "Unknown sender"} • {formatDate(message.created_at)}
+                        </p>
+                      </div>
+                      <p className="whitespace-pre-wrap text-sm text-foreground">{message.body}</p>
+                      {message.admin_note && (
+                        <div className="rounded-2xl border border-primary/10 bg-primary/5 p-3 text-sm text-primary">
+                          Admin note: {message.admin_note}
+                        </div>
+                      )}
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl bg-secondary/50 p-4">
+                          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Sender</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">{sender?.full_name || message.sender_id.slice(0, 8)}</div>
+                        </div>
+                        <div className="rounded-2xl bg-secondary/50 p-4">
+                          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Landlord</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">{landlord?.full_name || "Not available"}</div>
+                        </div>
+                        <div className="rounded-2xl bg-secondary/50 p-4">
+                          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Phone</div>
+                          <div className="mt-1 text-sm font-semibold text-foreground">{message.phone || "No phone supplied"}</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 text-sm font-semibold text-primary">
+                        <button onClick={() => copyAdminValue("Message ID", message.id)} className="inline-flex items-center gap-1 hover:underline"><Copy size={13} /> ID: {message.id.slice(0, 8)}...</button>
+                        {message.phone && <button onClick={() => copyAdminValue("Phone", message.phone!)} className="inline-flex items-center gap-1 hover:underline"><Copy size={13} /> Copy phone</button>}
+                        {message.property_id && <button onClick={() => navigate(`/?listing=${message.property_id}`)} className="inline-flex items-center gap-1 hover:underline"><Eye size={13} /> Open listing</button>}
+                      </div>
+                    </div>
+                    <div className="w-full max-w-sm rounded-3xl border border-border bg-slate-50 p-5">
+                      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Admin review</div>
+                      <div className="mt-4 grid gap-3">
+                        <button onClick={() => updateListingMessageStatus(message, "reviewing")} disabled={actionKey === `message-${message.id}-reviewing`} className="rounded-2xl border border-primary/20 bg-secondary px-4 py-3 text-sm font-semibold text-primary hover:bg-secondary/80 disabled:opacity-60">Mark reviewing</button>
+                        <button onClick={() => updateListingMessageStatus(message, "resolved")} disabled={actionKey === `message-${message.id}-resolved`} className="rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60">Mark resolved</button>
+                        <button onClick={() => updateListingMessageStatus(message, "dismissed")} disabled={actionKey === `message-${message.id}-dismissed`} className="rounded-2xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-60">Dismiss</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* PROTECTION TAB */}
         {activeTab === "protection" && (
           <div className="mt-6 space-y-4">
             {protectionCases.length === 0 && (
